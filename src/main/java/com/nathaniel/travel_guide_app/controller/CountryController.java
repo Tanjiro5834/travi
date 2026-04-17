@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.nathaniel.travel_guide_app.dto.DTOs.PackingCategoryDTO;
+import com.nathaniel.travel_guide_app.dto.response.CountryResponse;
 import com.nathaniel.travel_guide_app.entity.BudgetGuide;
 import com.nathaniel.travel_guide_app.entity.Country;
 import com.nathaniel.travel_guide_app.entity.CultureGuideItem;
@@ -32,7 +33,7 @@ public class CountryController {
     private final EntryRequirementService entryService;
 
     @GetMapping
-    public List<Country> getAll() {
+    public List<CountryResponse> getAll() {
         return countryService.getAllCountries();
     }
 

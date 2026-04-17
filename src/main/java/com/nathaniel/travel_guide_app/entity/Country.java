@@ -1,5 +1,6 @@
 package com.nathaniel.travel_guide_app.entity;
 
+import java.time.LocalDateTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -39,4 +40,7 @@ public class Country {
 
     @Column(columnDefinition = "int default 0")
     private int viewCount;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 }

@@ -40,6 +40,7 @@ public class SecurityConfig {
                                 "/api/countries",
                                 "/api/countries/**"
                         ).permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form.disable())

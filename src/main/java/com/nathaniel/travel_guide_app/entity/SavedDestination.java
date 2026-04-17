@@ -10,13 +10,16 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(
     name = "saved_destinations",
     uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "country_id"})
 )
-@Data
+@Getter
+@Setter
 public class SavedDestination {
 
     @Id

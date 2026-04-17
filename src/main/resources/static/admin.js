@@ -1,128 +1,333 @@
-const countries = [
-  {
-    id: 1,
-    flag: "🇯🇵",
-    name: "Japan",
-    region: "East Asia",
-    status: "Published",
-    updatedAt: "Apr 17, 2026"
-  },
-  {
-    id: 2,
-    flag: "🇫🇷",
-    name: "France",
-    region: "Europe",
-    status: "Draft",
-    updatedAt: "Apr 16, 2026"
-  },
-  {
-    id: 3,
-    flag: "🇸🇬",
-    name: "Singapore",
-    region: "Southeast Asia",
-    status: "Published",
-    updatedAt: "Apr 15, 2026"
-  },
-  {
-    id: 4,
-    flag: "🇰🇷",
-    name: "South Korea",
-    region: "East Asia",
-    status: "Review",
-    updatedAt: "Apr 14, 2026"
-  }
-];
+const API_BASE = "/api";
 
-const activities = [
-  {
-    title: "Japan budget guide updated",
-    description: "Mid-range daily budget and accommodation values were revised.",
-    status: "Draft"
-  },
-  {
-    title: "France culture guide edited",
-    description: "Added etiquette notes and dining customs for first-time travelers.",
-    status: "Saved"
-  },
-  {
-    title: "Singapore checklist published",
-    description: "New essentials and arrival-ready checklist are now live.",
-    status: "Live"
-  },
-  {
-    title: "South Korea entry requirement flagged",
-    description: "Passport validity note needs verification before republishing.",
-    status: "Review"
-  }
-];
+let countries = [];
+let filteredCountries = [];
+let currentEditingId = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-  renderCountries(countries);
-  renderActivities(activities);
+/* ============ AUTH ============ */
+function getToken() {
+  return localStorage.getItem("wayfarer_token");
+}
+
+function clearToken() {
+  localStorage.removeItem("wayfarer_token");
+}
+
+/* ============ API ============ */
+async function apiFetch(path, options = {}) {
+  const token = getToken();
+
+  const headers = {
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(options.headers || {})
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+
+  if (response.status === 401) {
+    clearToken();
+    throw new Error("Unauthorized");
+  }
+
+  if (response.status === 403) {
+    throw new Error("Forbidden");
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => response.statusText);
+    throw new Error(text || response.statusText);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  return response.json();
+}
+
+/* ============ DOM HELPERS ============ */
+function $(id) {
+  return document.getElementById(id);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function showToast(message, type = "info") {
+  let toast = document.getElementById("wayfarerAdminToast");
+
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "wayfarerAdminToast";
+    toast.style.cssText = `
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 9999;
+      max-width: 360px;
+      padding: 14px 18px;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 0.92rem;
+      font-weight: 500;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.22);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all 0.2s ease;
+      pointer-events: none;
+      background: #111827;
+    `;
+    document.body.appendChild(toast);
+  }
+
+  if (type === "success") toast.style.background = "#065f46";
+  else if (type === "error") toast.style.background = "#991b1b";
+  else if (type === "warning") toast.style.background = "#92400e";
+  else toast.style.background = "#111827";
+
+  toast.textContent = message;
+  toast.style.opacity = "1";
+  toast.style.transform = "translateY(0)";
+
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(8px)";
+  }, 2800);
+}
+
+function setLoadingState(isLoading) {
+  const tbody = $("countryTableBody");
+  if (!tbody) return;
+
+  if (isLoading) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="padding:24px; text-align:center; color:#7d879c;">
+          Loading countries...
+        </td>
+      </tr>
+    `;
+  }
+}
+
+/* ============ INIT ============ */
+document.addEventListener("DOMContentLoaded", async () => {
   initNav();
   initSearch();
   initActions();
+  injectCountryModal();
+
+  await bootstrapAdminPage();
 });
 
+async function bootstrapAdminPage() {
+  try {
+    setLoadingState(true);
+
+    await Promise.all([
+      loadDashboard().catch(err => {
+        console.warn("Dashboard load skipped:", err.message);
+      }),
+      loadCountries(),
+      loadActivity().catch(err => {
+        console.warn("Activity load skipped:", err.message);
+      })
+    ]);
+  } catch (err) {
+    handleBootstrapError(err);
+  }
+}
+
+function handleBootstrapError(err) {
+  console.error("Admin bootstrap failed:", err);
+
+  if (err.message === "Unauthorized") {
+    showToast("Please sign in first.", "error");
+    return;
+  }
+
+  if (err.message === "Forbidden") {
+    showToast("Admin access only.", "error");
+    renderCountries([]);
+    renderActivities([]);
+    return;
+  }
+
+  showToast("Failed to load admin data.", "error");
+  renderCountries([]);
+  renderActivities([]);
+}
+
+/* ============ LOADERS ============ */
+async function loadCountries() {
+  countries = await apiFetch("/admin/countries");
+  filteredCountries = [...countries];
+  renderCountries(filteredCountries);
+}
+
+async function loadDashboard() {
+  const data = await apiFetch("/admin/dashboard");
+
+  if ($("totalCountries")) $("totalCountries").textContent = formatNumber(data.totalCountries ?? 0);
+  if ($("publishedGuides")) $("publishedGuides").textContent = formatNumber(data.publishedGuides ?? 0);
+  if ($("draftUpdates")) $("draftUpdates").textContent = formatNumber(data.draftUpdates ?? 0);
+  if ($("totalSaves")) $("totalSaves").textContent = formatNumber(data.totalSaves ?? 0);
+}
+
+async function loadActivity() {
+  const items = await apiFetch("/admin/activity");
+  renderActivities(Array.isArray(items) ? items : []);
+}
+
+/* ============ RENDER COUNTRIES ============ */
 function renderCountries(items) {
-  const tbody = document.getElementById("countryTableBody");
+  const tbody = $("countryTableBody");
   if (!tbody) return;
 
-  tbody.innerHTML = items.map(country => `
-    <tr>
-      <td>
-        <div class="country-cell">
-          <div class="flag-box">${country.flag}</div>
-          <span>${country.name}</span>
-        </div>
-      </td>
-      <td>${country.region}</td>
-      <td>${renderStatusBadge(country.status)}</td>
-      <td>${country.updatedAt}</td>
-      <td>
-        <div class="table-actions">
-          <button class="mini-btn" onclick="handleView(${country.id})">View</button>
-          <button class="mini-btn" onclick="handleEdit(${country.id})">Edit</button>
-          <button class="mini-btn primary" onclick="handleManageContent(${country.id})">Manage Content</button>
-        </div>
-      </td>
-    </tr>
-  `).join("");
+  if (!items || !items.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="padding:24px; text-align:center; color:#7d879c;">
+          No countries found.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = items.map(country => {
+    const id = Number(country.id);
+    const flag = escapeHtml(country.flagEmoji || country.flag || "🌍");
+    const name = escapeHtml(country.name || "Unknown");
+    const region = escapeHtml(country.region || "-");
+    const status = country.status || inferCountryStatus(country);
+    const updatedAt = formatDate(country.updatedAt || country.updated_at || country.lastUpdated);
+
+    return `
+      <tr>
+        <td>
+          <div class="country-cell">
+            <div class="flag-box">${flag}</div>
+            <span>${name}</span>
+          </div>
+        </td>
+        <td>${region}</td>
+        <td>${renderStatusBadge(status)}</td>
+        <td>${updatedAt}</td>
+        <td>
+          <div class="table-actions">
+            <button class="mini-btn" data-action="view" data-id="${id}">View</button>
+            <button class="mini-btn" data-action="edit" data-id="${id}">Edit</button>
+            <button class="mini-btn" data-action="delete" data-id="${id}">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  bindCountryActionButtons();
 }
 
+function bindCountryActionButtons() {
+  document.querySelectorAll("[data-action='view']").forEach(btn => {
+    btn.addEventListener("click", () => handleView(Number(btn.dataset.id)));
+  });
+
+  document.querySelectorAll("[data-action='edit']").forEach(btn => {
+    btn.addEventListener("click", () => handleEdit(Number(btn.dataset.id)));
+  });
+
+  document.querySelectorAll("[data-action='delete']").forEach(btn => {
+    btn.addEventListener("click", () => handleDelete(Number(btn.dataset.id)));
+  });
+}
+
+function inferCountryStatus(country) {
+  if (typeof country.published === "boolean") {
+    return country.published ? "Published" : "Draft";
+  }
+  return "Draft";
+}
+
+/* ============ RENDER ACTIVITY ============ */
 function renderActivities(items) {
-  const container = document.getElementById("activityList");
+  const container = $("activityList");
   if (!container) return;
 
-  container.innerHTML = items.map(activity => `
-    <div class="list-item">
-      <div>
-        <h4>${activity.title}</h4>
-        <p>${activity.description}</p>
+  if (!items || !items.length) {
+    container.innerHTML = `
+      <div class="list-item">
+        <div>
+          <h4>No recent activity</h4>
+          <p>Recent admin actions will appear here once your backend provides them.</p>
+        </div>
+        <span class="badge badge-warning">Empty</span>
       </div>
-      ${renderStatusBadge(activity.status)}
-    </div>
-  `).join("");
+    `;
+    return;
+  }
+
+  container.innerHTML = items.map(item => {
+    const title = escapeHtml(item.title || item.action || "Activity");
+    const description = escapeHtml(
+      item.description ||
+      item.message ||
+      item.details ||
+      "No description available."
+    );
+    const status = item.status || item.type || "Info";
+
+    return `
+      <div class="list-item">
+        <div>
+          <h4>${title}</h4>
+          <p>${description}</p>
+        </div>
+        ${renderStatusBadge(status)}
+      </div>
+    `;
+  }).join("");
 }
 
+/* ============ BADGES ============ */
 function renderStatusBadge(status) {
-  const normalized = status.toLowerCase();
+  const raw = String(status || "Unknown");
+  const normalized = raw.toLowerCase();
 
-  if (normalized === "published" || normalized === "live" || normalized === "saved" || normalized === "ready") {
-    return `<span class="badge badge-success">${status}</span>`;
+  if (["published", "live", "saved", "ready", "success"].includes(normalized)) {
+    return `<span class="badge badge-success">${escapeHtml(raw)}</span>`;
   }
 
-  if (normalized === "draft") {
-    return `<span class="badge badge-warning">${status}</span>`;
+  if (["draft", "pending", "warning"].includes(normalized)) {
+    return `<span class="badge badge-warning">${escapeHtml(raw)}</span>`;
   }
 
-  return `<span class="badge badge-danger">${status}</span>`;
+  return `<span class="badge badge-danger">${escapeHtml(raw)}</span>`;
 }
 
+/* ============ NAV ============ */
 function initNav() {
   const navItems = document.querySelectorAll(".nav-item");
-  const pageTitle = document.getElementById("pageTitle");
-  const pageSubtitle = document.getElementById("pageSubtitle");
+  const pageTitle = $("pageTitle");
+  const pageSubtitle = $("pageSubtitle");
 
   navItems.forEach(item => {
     item.addEventListener("click", e => {
@@ -133,56 +338,10 @@ function initNav() {
 
       const section = item.dataset.section || "dashboard";
 
-      pageTitle.textContent = formatSectionTitle(section);
-      pageSubtitle.textContent = getSectionSubtitle(section);
+      if (pageTitle) pageTitle.textContent = formatSectionTitle(section);
+      if (pageSubtitle) pageSubtitle.textContent = getSectionSubtitle(section);
     });
   });
-}
-
-function initSearch() {
-  const input = document.getElementById("searchInput");
-  if (!input) return;
-
-  input.addEventListener("input", () => {
-    const query = input.value.trim().toLowerCase();
-
-    const filtered = countries.filter(country =>
-      country.name.toLowerCase().includes(query) ||
-      country.region.toLowerCase().includes(query) ||
-      country.status.toLowerCase().includes(query)
-    );
-
-    renderCountries(filtered);
-  });
-}
-
-function initActions() {
-  const exportBtn = document.getElementById("exportBtn");
-  const addCountryBtn = document.getElementById("addCountryBtn");
-
-  if (exportBtn) {
-    exportBtn.addEventListener("click", () => {
-      alert("Export feature will be connected to backend later.");
-    });
-  }
-
-  if (addCountryBtn) {
-    addCountryBtn.addEventListener("click", () => {
-      alert("Open add country modal/form here.");
-    });
-  }
-}
-
-function handleView(countryId) {
-  alert(`View country ID: ${countryId}`);
-}
-
-function handleEdit(countryId) {
-  alert(`Edit country ID: ${countryId}`);
-}
-
-function handleManageContent(countryId) {
-  alert(`Manage content for country ID: ${countryId}`);
 }
 
 function formatSectionTitle(section) {
@@ -232,4 +391,295 @@ function getSectionSubtitle(section) {
     default:
       return "Admin tools for managing Wayfarer content.";
   }
+}
+
+/* ============ SEARCH ============ */
+function initSearch() {
+  const input = $("searchInput");
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    const query = input.value.trim().toLowerCase();
+
+    filteredCountries = countries.filter(country => {
+      const name = String(country.name || "").toLowerCase();
+      const region = String(country.region || "").toLowerCase();
+      const status = String(country.status || inferCountryStatus(country)).toLowerCase();
+
+      return name.includes(query) || region.includes(query) || status.includes(query);
+    });
+
+    renderCountries(filteredCountries);
+  });
+}
+
+/* ============ ACTIONS ============ */
+function initActions() {
+  const exportBtn = $("exportBtn");
+  const addCountryBtn = $("addCountryBtn");
+
+  if (exportBtn) {
+    exportBtn.addEventListener("click", handleExportCountries);
+  }
+
+  if (addCountryBtn) {
+    addCountryBtn.addEventListener("click", handleAddCountry);
+  }
+}
+
+function handleExportCountries() {
+  if (!countries.length) {
+    showToast("No countries to export.", "warning");
+    return;
+  }
+
+  const rows = [
+    ["ID", "Flag", "Name", "Region", "Status", "Updated At"],
+    ...countries.map(country => [
+      country.id ?? "",
+      country.flagEmoji || country.flag || "",
+      country.name || "",
+      country.region || "",
+      country.status || inferCountryStatus(country),
+      country.updatedAt || country.updated_at || country.lastUpdated || ""
+    ])
+  ];
+
+  const csv = rows
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "wayfarer-admin-countries.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+  showToast("Countries exported.", "success");
+}
+
+function handleAddCountry() {
+  currentEditingId = null;
+  openCountryModal("Add Country", {
+    name: "",
+    region: "",
+    flagEmoji: "",
+    status: "Draft"
+  });
+}
+
+function handleView(countryId) {
+  const country = countries.find(c => Number(c.id) === Number(countryId));
+  if (!country) {
+    showToast("Country not found.", "error");
+    return;
+  }
+
+  openCountryModal("View Country", {
+    name: country.name || "",
+    region: country.region || "",
+    flagEmoji: country.flagEmoji || country.flag || "",
+    status: country.status || inferCountryStatus(country)
+  }, true);
+}
+
+function handleEdit(countryId) {
+  const country = countries.find(c => Number(c.id) === Number(countryId));
+  if (!country) {
+    showToast("Country not found.", "error");
+    return;
+  }
+
+  currentEditingId = countryId;
+  openCountryModal("Edit Country", {
+    name: country.name || "",
+    region: country.region || "",
+    flagEmoji: country.flagEmoji || country.flag || "",
+    status: country.status || inferCountryStatus(country)
+  });
+}
+
+async function handleDelete(countryId) {
+  const confirmed = window.confirm("Delete this country?");
+  if (!confirmed) return;
+
+  try {
+    await apiFetch(`/admin/countries/${countryId}`, {
+      method: "DELETE"
+    });
+
+    showToast("Country deleted.", "success");
+    await loadCountries();
+    await loadDashboard().catch(() => {});
+  } catch (err) {
+    console.error(err);
+    showToast(`Delete failed: ${err.message}`, "error");
+  }
+}
+
+/* ============ MODAL ============ */
+function injectCountryModal() {
+  if ($("countryModal")) return;
+
+  const modal = document.createElement("div");
+  modal.id = "countryModal";
+  modal.style.cssText = `
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 15, 30, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    padding: 20px;
+  `;
+
+  modal.innerHTML = `
+    <div style="
+      width: 100%;
+      max-width: 560px;
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.22);
+    ">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <h3 id="countryModalTitle" style="font-size:1.35rem;margin:0;">Country</h3>
+        <button id="closeCountryModalBtn" style="
+          border:none;
+          background:#f3f4f6;
+          width:36px;
+          height:36px;
+          border-radius:999px;
+          cursor:pointer;
+          font-size:18px;
+        ">×</button>
+      </div>
+
+      <form id="countryForm">
+        <div style="display:grid;gap:14px;">
+          <div>
+            <label for="countryName" style="display:block;margin-bottom:8px;font-weight:600;">Name</label>
+            <input id="countryName" name="name" type="text" required style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
+          </div>
+
+          <div>
+            <label for="countryRegion" style="display:block;margin-bottom:8px;font-weight:600;">Region</label>
+            <input id="countryRegion" name="region" type="text" required style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
+          </div>
+
+          <div>
+            <label for="countryFlagEmoji" style="display:block;margin-bottom:8px;font-weight:600;">Flag Emoji</label>
+            <input id="countryFlagEmoji" name="flagEmoji" type="text" placeholder="🇯🇵" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
+          </div>
+
+          <div>
+            <label for="countryStatus" style="display:block;margin-bottom:8px;font-weight:600;">Status</label>
+            <select id="countryStatus" name="status" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
+              <option value="Draft">Draft</option>
+              <option value="Published">Published</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="countryModalActions" style="display:flex;justify-content:flex-end;gap:10px;margin-top:22px;">
+          <button type="button" id="cancelCountryBtn" class="btn btn-outline">Cancel</button>
+          <button type="submit" id="saveCountryBtn" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  $("closeCountryModalBtn").addEventListener("click", closeCountryModal);
+  $("cancelCountryBtn").addEventListener("click", closeCountryModal);
+  modal.addEventListener("click", e => {
+    if (e.target === modal) closeCountryModal();
+  });
+
+  $("countryForm").addEventListener("submit", submitCountryForm);
+}
+
+function openCountryModal(title, values = {}, readOnly = false) {
+  $("countryModalTitle").textContent = title;
+  $("countryName").value = values.name || "";
+  $("countryRegion").value = values.region || "";
+  $("countryFlagEmoji").value = values.flagEmoji || "";
+  $("countryStatus").value = values.status || "Draft";
+
+  ["countryName", "countryRegion", "countryFlagEmoji", "countryStatus"].forEach(id => {
+    $(id).disabled = readOnly;
+  });
+
+  $("saveCountryBtn").style.display = readOnly ? "none" : "inline-flex";
+  $("countryModal").style.display = "flex";
+}
+
+function closeCountryModal() {
+  $("countryModal").style.display = "none";
+  currentEditingId = null;
+  $("countryForm").reset();
+}
+
+async function submitCountryForm(event) {
+  event.preventDefault();
+
+  const payload = {
+    name: $("countryName").value.trim(),
+    region: $("countryRegion").value.trim(),
+    flagEmoji: $("countryFlagEmoji").value.trim(),
+    status: $("countryStatus").value
+  };
+
+  if (!payload.name || !payload.region) {
+    showToast("Name and region are required.", "warning");
+    return;
+  }
+
+  try {
+    if (currentEditingId) {
+      await apiFetch(`/admin/countries/${currentEditingId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+      showToast("Country updated.", "success");
+    } else {
+      await apiFetch("/admin/countries", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      showToast("Country created.", "success");
+    }
+
+    closeCountryModal();
+    await loadCountries();
+    await loadDashboard().catch(() => {});
+  } catch (err) {
+    console.error(err);
+    showToast(`Save failed: ${err.message}`, "error");
+  }
+}
+
+/* ============ FORMATTERS ============ */
+function formatDate(value) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString();
 }

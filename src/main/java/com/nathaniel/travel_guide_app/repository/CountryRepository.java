@@ -10,5 +10,7 @@ import com.nathaniel.travel_guide_app.entity.Country;
 public interface CountryRepository extends JpaRepository<Country, Long> {     
      Optional<Country> findBySlug(String slug);    
      Optional<Country> findFirstByOrderByViewCountDesc();
+     Optional<Country> findByName(String name);
      List<Country> findByNameContainingIgnoreCase(String keyword); 
+     List<Country> findTop5ByOrderByUpdatedAtDesc();
 }
