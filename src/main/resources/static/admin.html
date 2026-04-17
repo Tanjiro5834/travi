@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wayfarer Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+  <div class="admin-shell">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">W</div>
+        <div class="brand-text">
+          <h1>Wayfarer Admin</h1>
+          <p>Travel content operations</p>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-title">Overview</div>
+        <a href="#" class="nav-item active" data-section="dashboard">Dashboard</a>
+        <a href="#" class="nav-item" data-section="analytics">Analytics</a>
+        <a href="#" class="nav-item" data-section="users">Users</a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-title">Content</div>
+        <a href="#" class="nav-item" data-section="countries">Countries</a>
+        <a href="#" class="nav-item" data-section="requirements">Entry Requirements</a>
+        <a href="#" class="nav-item" data-section="budgets">Budget Guides</a>
+        <a href="#" class="nav-item" data-section="packing">Packing Checklists</a>
+        <a href="#" class="nav-item" data-section="tips">Local Tips</a>
+        <a href="#" class="nav-item" data-section="culture">Culture Guides</a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-title">System</div>
+        <a href="#" class="nav-item" data-section="drafts">Drafts</a>
+        <a href="#" class="nav-item" data-section="publish">Publish Queue</a>
+        <a href="#" class="nav-item" data-section="settings">Settings</a>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <header class="topbar">
+        <div class="page-heading">
+          <h2 id="pageTitle">Editorial Command Center</h2>
+          <p id="pageSubtitle">
+            Manage destinations, keep travel data accurate, and publish updates with confidence.
+          </p>
+        </div>
+
+        <div class="topbar-actions">
+          <input
+            id="searchInput"
+            class="search"
+            type="text"
+            placeholder="Search countries, drafts, requirements..."
+          />
+          <button class="btn btn-outline" id="exportBtn">Export</button>
+          <button class="btn btn-primary" id="addCountryBtn">+ Add Country</button>
+        </div>
+      </header>
+
+      <!-- HERO -->
+      <section class="hero-panel">
+        <div>
+          <h3>Good afternoon, Admin.</h3>
+          <p>
+            You’re managing the live knowledge base behind Wayfarer’s public destination pages:
+            country overviews, entry requirements, budgets, packing lists, local tips, and culture guidance.
+          </p>
+
+          <div class="quick-actions">
+            <button class="quick-chip">+ New country</button>
+            <button class="quick-chip">Update visa rules</button>
+            <button class="quick-chip">Publish budget changes</button>
+            <button class="quick-chip">Review missing fields</button>
+          </div>
+        </div>
+
+        <div class="hero-side">
+          <h4>Attention Needed</h4>
+
+          <div class="task-list">
+            <div class="task-item">
+              <div>
+                <strong>Japan</strong>
+                <small>Budget guide updated but not published</small>
+              </div>
+              <span class="badge badge-warning">Draft</span>
+            </div>
+
+            <div class="task-item">
+              <div>
+                <strong>France</strong>
+                <small>Entry requirement note missing insurance details</small>
+              </div>
+              <span class="badge badge-danger">Incomplete</span>
+            </div>
+
+            <div class="task-item">
+              <div>
+                <strong>Singapore</strong>
+                <small>Checklist and culture guide ready for release</small>
+              </div>
+              <span class="badge badge-success">Ready</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- KPI CARDS -->
+      <section class="stats-grid">
+        <div class="stat-card">
+          <span>Total Countries</span>
+          <h3 id="totalCountries">24</h3>
+          <p>3 added this month</p>
+        </div>
+
+        <div class="stat-card">
+          <span>Published Guides</span>
+          <h3 id="publishedGuides">116</h3>
+          <p>Across all content modules</p>
+        </div>
+
+        <div class="stat-card">
+          <span>Draft Updates</span>
+          <h3 id="draftUpdates">9</h3>
+          <p>Pending review before publish</p>
+        </div>
+
+        <div class="stat-card">
+          <span>Total Saves</span>
+          <h3 id="totalSaves">1,284</h3>
+          <p>Bookmarks from users</p>
+        </div>
+      </section>
+
+      <!-- MAIN CONTENT GRID -->
+      <section class="content-grid">
+        <!-- COUNTRIES TABLE -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h3>Countries</h3>
+              <p>Manage public destination content and publishing status.</p>
+            </div>
+            <button class="btn btn-outline">View All</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Country</th>
+                  <th>Region</th>
+                  <th>Status</th>
+                  <th>Last Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="countryTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- RECENT ACTIVITY -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h3>Recent Admin Activity</h3>
+              <p>Latest content operations in the system.</p>
+            </div>
+          </div>
+
+          <div class="list" id="activityList"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
