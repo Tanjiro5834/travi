@@ -26,6 +26,12 @@ public class Country {
     @Column(nullable = false, unique = true)
     private String slug;
 
+    @Column(nullable = false)
+    private String region;      // Asia, Europe, Africa
+
+    @Column(name = "sub_region")
+    private String subRegion;   // East Asia, Southeast Asia
+
     private String code; // JP, KR, SG
     private String capital;
     private String currency;

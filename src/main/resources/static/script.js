@@ -436,12 +436,12 @@ function activateTab(tab) {
 //   language, powerPlug, drivingSide, climate, tipping, internet,
 //   bestMonths (String e.g. "March,April" or List<String>)
 function populateOverview(c) {
-  $('overviewDesc').textContent = c.description || '';
+  $('overviewDesc').textContent = c.overview || 'No overview available.';
 
   const stats = [
-    { value: c.population || '—', label: 'Population' },
     { value: c.currency || '—', label: 'Currency' },
     { value: c.timeZone || '—', label: 'Time Zone' },
+    { value: c.safetyLevel || '—', label: 'Safety' },
   ];
   $('statsRow').innerHTML = stats.map(s => `
     <div class="stat-box">
@@ -476,8 +476,9 @@ function populateOverview(c) {
 
   // bestMonths can be a comma-separated string or an array
   let months = [];
-  if (Array.isArray(c.bestMonths)) months = c.bestMonths;
-  else if (typeof c.bestMonths === 'string' && c.bestMonths) months = c.bestMonths.split(',').map(m => m.trim());
+  if (c.bestTimeToVisit) {
+    months = c.bestTimeToVisit.split(',').map(m => m.trim());
+  }
 
   $('bestTime').innerHTML = `
     <h3 class="card-label">Best Time to Visit</h3>

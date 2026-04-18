@@ -15,6 +15,7 @@ public class CountryRequest {
     private String code;
 
     private String region; // Matches Response
+    private String subRegion;
     private String capital;
     private String currency;
     private String language;
@@ -22,6 +23,6 @@ public class CountryRequest {
     private String bestTimeToVisit;
     private String safetyLevel;
     private String flagUrl;
-    private String flagEmoji; // Matches Response
+    //private String flagEmoji; // Matches Response
     private String overview;
 }

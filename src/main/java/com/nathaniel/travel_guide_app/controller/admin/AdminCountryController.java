@@ -2,17 +2,11 @@ package com.nathaniel.travel_guide_app.controller.admin;
 
 import java.util.List;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import com.nathaniel.travel_guide_app.dto.admin_dto.request.CreateCountryRequest;
 import com.nathaniel.travel_guide_app.dto.admin_dto.request.UpdateCountryRequest;
+import com.nathaniel.travel_guide_app.dto.admin_dto.response.AdminCountryResponse;
+import com.nathaniel.travel_guide_app.dto.response.CountryDetailResponse;
 import com.nathaniel.travel_guide_app.dto.response.CountryResponse;
 import com.nathaniel.travel_guide_app.service.CountryService;
 import lombok.RequiredArgsConstructor;
@@ -21,11 +15,22 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/admin/countries")
 @RequiredArgsConstructor
 public class AdminCountryController {
+
     private final CountryService countryService;
 
     @GetMapping
     public List<CountryResponse> getAll() {
         return countryService.getAllCountries();
+    }
+
+    @GetMapping("/{id}")
+    public AdminCountryResponse getById(@PathVariable Long id) {
+        return countryService.getAdminCountryById(id);
+    }
+
+    @GetMapping("/{id}/details")
+    public CountryDetailResponse getCountryDetailById(@PathVariable Long id) {
+        return countryService.getCountryDetailById(id);
     }
 
     @PostMapping
@@ -43,10 +48,5 @@ public class AdminCountryController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
         countryService.deleteCountry(id);
-    }
-
-    @GetMapping("/test")
-    public String test() {
-        return "admin country controller reached";
     }
 }

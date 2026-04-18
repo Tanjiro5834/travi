@@ -15,39 +15,52 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // Default strength is 10
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
-                .cors(Customizer.withDefaults())
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // ✅ FIX
-                        .requestMatchers(
-                                "/",
-                                "/index.html",
-                                "/style.css",
-                                "/script.js",
-                                "/admin.html",
-                                "/admin.css",
-                                "/admin.js",
-                                "/favicon.ico",
-                                "/images/**",
-                                "/api/auth/**",
-                                "/api/countries",
-                                "/api/countries/**"
-                        ).permitAll()
-                        //.requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/admin/**").permitAll() 
-                        .anyRequest().authenticated()
-                )
-                .formLogin(form -> form.disable())
-                .httpBasic(basic -> basic.disable());
+            .csrf(csrf -> csrf.disable())
+            .cors(Customizer.withDefaults())
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                .requestMatchers(
+                    "/",
+                    "/index.html",
+                    "/favicon.ico",
+                    "/images/**",
+
+                    "/admin/**",
+                    "/admin.html",
+                    "/admin.css",
+                    "/admin.js",
+
+                    "/style.css",
+                    "/script.js"
+                ).permitAll()
+
+                .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                .requestMatchers(HttpMethod.GET,
+                    "/api/countries",
+                    "/api/countries/**",
+                    "/api/entry-requirements/**",
+                    "/api/budgets/**",
+                    "/api/packing-checklists/**"
+                ).permitAll()
+
+                .requestMatchers("/api/auth/me").authenticated()
+                .requestMatchers("/api/saved-destinations/**").authenticated()
+                .requestMatchers("/api/admin/**").permitAll()
+
+                .anyRequest().authenticated()
+            )
+            .formLogin(form -> form.disable())
+            .httpBasic(basic -> basic.disable());
 
         return http.build();
     }
