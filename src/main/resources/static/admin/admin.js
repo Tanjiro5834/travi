@@ -765,7 +765,7 @@ function inferCountryStatus(country) {
   if (typeof country.published === "boolean") {
     return country.published ? "Published" : "Draft";
   }
-  return "Draft";
+  return "Published";
 }
 
 /* ============ RENDER ACTIVITY ============ */

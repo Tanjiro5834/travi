@@ -495,47 +495,65 @@ function populateOverview(c) {
 //   vaccinations, insuranceNote, customsInfo, importantNote
 function populateEntry(e) {
   if (!e) {
-    $('entryGrid').innerHTML = '<div class="entry-card full-width"><p class="entry-desc">Entry requirement data unavailable.</p></div>';
+    $("entryGrid").innerHTML =
+      '<div class="entry-card full-width"><p class="entry-desc">Entry requirement data unavailable.</p></div>';
     return;
   }
 
-  const statusMap = { GREEN: 'badge-green', YELLOW: 'badge-yellow', RED: 'badge-red' };
-  const badgeClass = statusMap[(e.visaStatus || '').toUpperCase()] || 'badge-yellow';
-  const reqList = Array.isArray(e.requirementsList) ? e.requirementsList : [];
+  const visaLabelMap = {
+    VISA_FREE: "Visa-Free",
+    VISA_REQUIRED: "Visa Required",
+    E_VISA: "e-Visa"
+  };
 
-  $('entryGrid').innerHTML = `
+  const visaLabel = visaLabelMap[e.visaType] || e.visaType || "Check Requirements";
+
+  const entryItems = [
+    e.maxStayDays != null ? `Maximum stay: ${e.maxStayDays} days` : null,
+    e.additionalNotes || null
+  ].filter(Boolean);
+
+  $("entryGrid").innerHTML = `
     <div class="entry-card">
       <div class="entry-card-title">
         <span class="entry-icon">🛂</span> Visa Requirements
-        <span class="entry-badge ${badgeClass}">${e.visaLabel || 'Check requirements'}</span>
+        <span class="entry-badge badge-yellow">${visaLabel}</span>
       </div>
-      <p class="entry-desc">${e.visaNote || ''}</p>
+      <p class="entry-desc">${visaLabel}</p>
     </div>
+
     <div class="entry-card">
       <div class="entry-card-title"><span class="entry-icon">📗</span> Passport Validity</div>
-      <p class="entry-desc">${e.passportValidity || '—'}</p>
+      <p class="entry-desc">${e.passportValidityRequired || "—"}</p>
     </div>
+
     <div class="entry-card">
       <div class="entry-card-title"><span class="entry-icon">📋</span> Entry Requirements</div>
       <div class="entry-list">
-        ${reqList.map(r => `<div class="entry-list-item">${r}</div>`).join('') || '<p class="entry-desc">—</p>'}
+        ${
+          entryItems.length
+            ? entryItems.map(item => `<div class="entry-list-item">${item}</div>`).join("")
+            : '<p class="entry-desc">—</p>'
+        }
       </div>
     </div>
+
     <div class="entry-card">
       <div class="entry-card-title"><span class="entry-icon">💉</span> Health</div>
-      ${e.vaccinations ? `<p class="entry-desc"><strong>Vaccinations:</strong> ${e.vaccinations}</p>` : ''}
-      ${e.insuranceNote ? `<p class="entry-desc" style="margin-top:10px"><strong>Insurance:</strong> ${e.insuranceNote}</p>` : ''}
+      ${e.vaccinationRequirements ? `<p class="entry-desc"><strong>Vaccinations:</strong> ${e.vaccinationRequirements}</p>` : '<p class="entry-desc">—</p>'}
+      ${e.travelInsurance ? `<p class="entry-desc" style="margin-top:10px"><strong>Insurance:</strong> ${e.travelInsurance}</p>` : ""}
     </div>
-    ${e.customsInfo ? `
-    <div class="entry-card full-width">
-      <div class="entry-card-title"><span class="entry-icon">🧳</span> Customs &amp; Import Rules</div>
-      <p class="entry-desc">${e.customsInfo}</p>
-    </div>` : ''}
-    ${e.importantNote ? `
-    <div class="entry-card full-width" style="border-top: 3px solid var(--gold); background: #fffbf0;">
-      <div class="entry-card-title"><span class="entry-icon">⚠️</span> Important Note</div>
-      <p class="entry-desc">${e.importantNote}</p>
-    </div>` : ''}
+
+    ${
+      e.customsNotes
+        ? `
+        <div class="entry-card full-width">
+          <div class="entry-card-title"><span class="entry-icon">🧳</span> Customs Notes</div>
+          <p class="entry-desc">${e.customsNotes}</p>
+        </div>
+      `
+        : ""
+    }
   `;
 }
 
