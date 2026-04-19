@@ -38,23 +38,5 @@ It provides country overviews, entry requirements, budget guides, packing checkl
 - CSS
 - JavaScript
 
----
-
-## Project Structure
-
-```text
-src/
-├── main/
-│   ├── java/com/nathaniel/travel_guide_app/
-│   │   ├── controller/
-│   │   ├── service/
-│   │   ├── repository/
-│   │   ├── entity/
-│   │   ├── dto/
-│   │   ├── mapper/
-│   │   └── exception/
-│   └── resources/
-│       ├── static/
-│       ├── templates/
-│       ├── db/migration/
-│       └── application.properties
+# Full Stack Java Developer
+## Nathaniel Coronacion
