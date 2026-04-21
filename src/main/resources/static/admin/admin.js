@@ -1236,94 +1236,119 @@ function injectCountryModal() {
     overflow-y: auto;
     `;
 
+  const fieldStyle = `width:100%;padding:10px 13px;border:1px solid #d1d5db;border-radius:10px;font-size:0.9rem;box-sizing:border-box;`;
+  const labelStyle = `display:block;margin-bottom:6px;font-weight:600;font-size:0.82rem;color:#374151;`;
+
   modal.innerHTML = `
     <div style="
       width: 100%;
-      max-width: 560px;
+      max-width: 860px;
       background: #ffffff;
       border-radius: 20px;
-      padding: 24px;
       box-shadow: 0 24px 60px rgba(0,0,0,0.22);
+      display: flex;
+      flex-direction: column;
+      max-height: 90vh;
     ">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
-        <h3 id="countryModalTitle" style="font-size:1.35rem;margin:0;">Country</h3>
+      <!-- HEADER (fixed) -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:22px 28px 18px;border-bottom:1px solid #f0f0f0;flex-shrink:0;">
+        <h3 id="countryModalTitle" style="font-size:1.25rem;margin:0;font-weight:700;">Country</h3>
         <button id="closeCountryModalBtn" style="
           border:none;
           background:#f3f4f6;
-          width:36px;
-          height:36px;
+          width:34px;
+          height:34px;
           border-radius:999px;
           cursor:pointer;
           font-size:18px;
+          line-height:1;
         ">×</button>
       </div>
 
-      <form id="countryForm">
-        <div style="display:grid;gap:14px;">
-        <div>
-            <label for="countryRegion" style="display:block;margin-bottom:8px;font-weight:600;">Region</label>
-            <input id="countryRegion" name="region" type="text" placeholder="Asia" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
+      <!-- BODY (scrollable) -->
+      <form id="countryForm" style="display:flex;flex-direction:column;flex:1;min-height:0;">
+        <div style="
+          padding: 24px 28px;
+          overflow-y: auto;
+          flex: 1;
+        ">
+          <!-- 2-column grid: 6 fields left, 6 fields right -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 24px;">
+
+            <!-- LEFT COL -->
+            <div>
+              <label for="countryRegion" style="${labelStyle}">Region</label>
+              <input id="countryRegion" name="region" type="text" placeholder="Asia" style="${fieldStyle}">
+            </div>
+            <div>
+              <label for="countryLanguage" style="${labelStyle}">Language</label>
+              <input id="countryLanguage" name="language" type="text" placeholder="Japanese" style="${fieldStyle}">
             </div>
 
             <div>
-            <label for="countrySubRegion" style="display:block;margin-bottom:8px;font-weight:600;">Sub Region</label>
-            <input id="countrySubRegion" name="subRegion" type="text" placeholder="East Asia" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
+              <label for="countrySubRegion" style="${labelStyle}">Sub Region</label>
+              <input id="countrySubRegion" name="subRegion" type="text" placeholder="East Asia" style="${fieldStyle}">
+            </div>
+            <div>
+              <label for="countryTimeZone" style="${labelStyle}">Time Zone</label>
+              <input id="countryTimeZone" name="timeZone" type="text" placeholder="JST (UTC+9)" style="${fieldStyle}">
+            </div>
+
+            <div>
+              <label for="countryName" style="${labelStyle}">Name <span style="color:#ef4444;">*</span></label>
+              <input id="countryName" name="name" type="text" required placeholder="Japan" style="${fieldStyle}">
+            </div>
+            <div>
+              <label for="countryBestTimeToVisit" style="${labelStyle}">Best Time to Visit</label>
+              <input id="countryBestTimeToVisit" name="bestTimeToVisit" type="text" placeholder="March to May, October to November" style="${fieldStyle}">
+            </div>
+
+            <div>
+              <label for="countryCode" style="${labelStyle}">Code</label>
+              <input id="countryCode" name="code" type="text" placeholder="JPN" style="${fieldStyle}">
+            </div>
+            <div>
+              <label for="countrySafetyLevel" style="${labelStyle}">Safety Level</label>
+              <input id="countrySafetyLevel" name="safetyLevel" type="text" placeholder="High" style="${fieldStyle}">
+            </div>
+
+            <div>
+              <label for="countryCapital" style="${labelStyle}">Capital</label>
+              <input id="countryCapital" name="capital" type="text" placeholder="Tokyo" style="${fieldStyle}">
+            </div>
+            <div>
+              <label for="countryFlagUrl" style="${labelStyle}">Flag URL</label>
+              <input id="countryFlagUrl" name="flagUrl" type="text" placeholder="https://..." style="${fieldStyle}">
+            </div>
+
+            <div>
+              <label for="countryCurrency" style="${labelStyle}">Currency</label>
+              <input id="countryCurrency" name="currency" type="text" placeholder="Japanese Yen" style="${fieldStyle}">
+            </div>
+            <div>
+              <!-- placeholder right col row 6 — keeps grid aligned -->
+            </div>
+
+            <!-- OVERVIEW: full width, last row -->
+            <div style="grid-column: 1 / -1;">
+              <label for="countryOverview" style="${labelStyle}">Overview</label>
+              <textarea id="countryOverview" name="overview" rows="4" placeholder="Write a short country overview..." style="${fieldStyle}resize:vertical;"></textarea>
+            </div>
+
+          </div>
         </div>
 
-        <div>
-            <label for="countryName" style="display:block;margin-bottom:8px;font-weight:600;">Name</label>
-            <input id="countryName" name="name" type="text" required style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countryCode" style="display:block;margin-bottom:8px;font-weight:600;">Code</label>
-            <input id="countryCode" name="code" type="text" placeholder="JPN" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countryCapital" style="display:block;margin-bottom:8px;font-weight:600;">Capital</label>
-            <input id="countryCapital" name="capital" type="text" placeholder="Tokyo" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countryCurrency" style="display:block;margin-bottom:8px;font-weight:600;">Currency</label>
-            <input id="countryCurrency" name="currency" type="text" placeholder="Japanese Yen" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countryLanguage" style="display:block;margin-bottom:8px;font-weight:600;">Language</label>
-            <input id="countryLanguage" name="language" type="text" placeholder="Japanese" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countryTimeZone" style="display:block;margin-bottom:8px;font-weight:600;">Time Zone</label>
-            <input id="countryTimeZone" name="timeZone" type="text" placeholder="JST (UTC+9)" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countryBestTimeToVisit" style="display:block;margin-bottom:8px;font-weight:600;">Best Time to Visit</label>
-            <input id="countryBestTimeToVisit" name="bestTimeToVisit" type="text" placeholder="March to May, October to November" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countrySafetyLevel" style="display:block;margin-bottom:8px;font-weight:600;">Safety Level</label>
-            <input id="countrySafetyLevel" name="safetyLevel" type="text" placeholder="High" style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countryFlagUrl" style="display:block;margin-bottom:8px;font-weight:600;">Flag URL</label>
-            <input id="countryFlagUrl" name="flagUrl" type="text" placeholder="https://..." style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;">
-        </div>
-
-        <div>
-            <label for="countryOverview" style="display:block;margin-bottom:8px;font-weight:600;">Overview</label>
-            <textarea id="countryOverview" name="overview" rows="5" placeholder="Write a short country overview..." style="width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;resize:vertical;"></textarea>
-        </div>
-        </div>
-
-        <div id="countryModalActions" style="display:flex;justify-content:flex-end;gap:10px;margin-top:22px;">
+        <!-- FOOTER (fixed) -->
+        <div id="countryModalActions" style="
+          display:flex;
+          justify-content:flex-end;
+          gap:10px;
+          padding:16px 28px;
+          border-top:1px solid #f0f0f0;
+          flex-shrink:0;
+        ">
           <button type="button" id="cancelCountryBtn" class="btn btn-outline">Cancel</button>
-          <button type="submit" id="saveCountryBtn" class="btn btn-primary">Save</button>
+          <button type="submit" id="saveCountryBtn" class="btn btn-primary">Save Country</button>
         </div>
       </form>
     </div>
