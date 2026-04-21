@@ -5,8 +5,13 @@
 *.min.js linguist-generated=true
 *.min.css linguist-generated=true
 
-# Mark static assets as vendored/generated if needed
-src/main/resources/static/** linguist-vendored
+# Reduce frontend weight
+*.js linguist-detectable=false
+*.css linguist-detectable=false
+*.html linguist-detectable=false
 
-# Keep migration SQL counted if you want backend weight
-# *.sql linguist-language=SQL
+# Keep SQL counted
+*.sql linguist-language=SQL
+
+# Java dominant
+*.java linguist-detectable=true
