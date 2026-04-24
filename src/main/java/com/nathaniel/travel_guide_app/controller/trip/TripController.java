@@ -36,16 +36,16 @@ public class TripController {
     }
 
     @GetMapping("/user/{userId}")
-    public List<Trip> getByUser(@PathVariable Long userId) {
-        return tripService.getByUser(userId);
+    public List<TripResponse> getByUser(@PathVariable Long userId) {
+        return tripService.getResponsesByUser(userId);
     }
 
     @GetMapping("/user/{userId}/status/{status}")
-    public List<Trip> getByUserAndStatus(
+    public List<TripResponse> getByUserAndStatus(
             @PathVariable Long userId,
             @PathVariable TripStatus status
     ) {
-        return tripService.getByUserAndStatus(userId, status);
+        return tripService.getResponsesByUserAndStatus(userId, status);
     }
 
     @GetMapping("/me")

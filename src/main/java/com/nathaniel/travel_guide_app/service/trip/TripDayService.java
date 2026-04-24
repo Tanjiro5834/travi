@@ -31,6 +31,13 @@ public class TripDayService {
             .orElseThrow(() -> new RuntimeException("Trip day not found with id: " + id));
     }
 
+    public List<TripDayResponse> getResponsesByTripId(Long tripId) {
+        return tripDayRepository.findByTripIdOrderByDayNumberAsc(tripId)
+            .stream()
+            .map(tripDayMapper::toResponse)
+            .toList();
+    }
+
     @Transactional
     public TripDayResponse createTripDay(TripDayRequest tripDayRequest) {
         Trip trip = tripRepository.findById(tripDayRequest.getTripId())

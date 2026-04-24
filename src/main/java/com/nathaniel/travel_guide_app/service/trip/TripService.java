@@ -184,6 +184,20 @@ public class TripService {
             .toList();
     }
 
+    public List<TripResponse> getResponsesByUser(Long userId) {
+        return tripRepository.findByUserId(userId)
+            .stream()
+            .map(tripMapper::toResponse)
+            .toList();
+    }
+
+    public List<TripResponse> getResponsesByUserAndStatus(Long userId, TripStatus status) {
+        return tripRepository.findByUserIdAndStatus(userId, status)
+            .stream()
+            .map(tripMapper::toResponse)
+            .toList();
+    }
+
     private String[][] pickSlots(TravelStyle travelStyle) {
         if (travelStyle == null) {
             travelStyle = TravelStyle.SOLO;
