@@ -508,6 +508,15 @@
           </div>
         </div>
 
+        <label>Total Budget (₱)</label>
+        <input
+          id="tripTotalBudget"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="e.g. 1500"
+        />
+
         <label>Notes</label>
         <textarea
           id="tripNotes"
@@ -536,7 +545,11 @@
 
     <div class="planner-modal-backdrop hidden" id="editActivityModal">
       <form class="planner-modal" id="editActivityForm">
-        <button type="button" class="planner-modal-close" id="closeEditActivityModal">
+        <button
+          type="button"
+          class="planner-modal-close"
+          id="closeEditActivityModal"
+        >
           ✕
         </button>
 
@@ -544,6 +557,8 @@
         <h2>Update itinerary activity</h2>
 
         <input type="hidden" id="editActivityId" />
+
+        <input type="hidden" id="editActivityTripDayId" />
 
         <label>Place</label>
         <select id="editActivityPlaceId" required></select>

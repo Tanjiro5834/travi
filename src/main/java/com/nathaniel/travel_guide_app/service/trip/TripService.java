@@ -1,13 +1,17 @@
 package com.nathaniel.travel_guide_app.service.trip;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-
+import java.util.Map;
 import org.springframework.stereotype.Service;
-
+import com.nathaniel.travel_guide_app.dto.DTOs.BudgetForecastDTO;
+import com.nathaniel.travel_guide_app.dto.DTOs.BudgetSummaryDTO;
 import com.nathaniel.travel_guide_app.dto.request.trip.TripRequest;
 import com.nathaniel.travel_guide_app.dto.response.trip.TripDayResponse;
 import com.nathaniel.travel_guide_app.dto.response.trip.TripResponse;
@@ -16,6 +20,7 @@ import com.nathaniel.travel_guide_app.entity.Place;
 import com.nathaniel.travel_guide_app.entity.Trip;
 import com.nathaniel.travel_guide_app.entity.TripActivity;
 import com.nathaniel.travel_guide_app.entity.TripDay;
+import com.nathaniel.travel_guide_app.enums.BudgetCategory;
 import com.nathaniel.travel_guide_app.enums.TravelStyle;
 import com.nathaniel.travel_guide_app.enums.TripStatus;
 import com.nathaniel.travel_guide_app.mapper.TripDayMapper;
@@ -40,6 +45,9 @@ public class TripService {
     private final CountryRepository countryRepository;
     private final TripMapper tripMapper;
     private final TripDayMapper tripDayMapper;
+
+    private final BudgetTrackingService budgetTrackingService;
+    private final BudgetAllocationService budgetAllocationService;
 
     public List<Trip> getByUser(Long userId) {
         return tripRepository.findByUserId(userId);
@@ -182,6 +190,70 @@ public class TripService {
 
             tripActivityRepository.save(activity);
         }
+    }
+
+    public BudgetSummaryDTO getBudgetSummary(Long tripId) {
+        return budgetTrackingService.getBudgetSummary(tripId);
+    }
+
+    public BudgetForecastDTO getBudgetForecast(Long tripId) {
+        Trip trip = tripRepository.findById(tripId)
+            .orElseThrow(() -> new RuntimeException("Trip not found with id: " + tripId));
+
+        BigDecimal totalBudget = trip.getTotalBudget();
+        
+        if (totalBudget == null || totalBudget.compareTo(BigDecimal.ZERO) <= 0) {
+            return new BudgetForecastDTO(
+                BigDecimal.ZERO,
+                trip.getNumberOfDays(),
+                trip.getTravelStyle() != null ? trip.getTravelStyle().name() : "SOLO",
+                BigDecimal.ZERO,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                budgetTrackingService.getBudgetSummary(tripId)
+            );
+        }
+
+        Map<BudgetCategory, BigDecimal> percentages = 
+            budgetAllocationService.getAllocationPercentages(trip.getTravelStyle());
+
+        Map<BudgetCategory, BigDecimal> amounts = new LinkedHashMap<>();
+        Map<BudgetCategory, String> tips = new LinkedHashMap<>();
+
+        int days = trip.getNumberOfDays();
+
+        percentages.forEach((category, pct) -> {
+            BigDecimal amount = totalBudget.multiply(pct).setScale(2, RoundingMode.HALF_UP);
+            amounts.put(category, amount);
+            tips.put(category, generateTip(category, amount, days));
+        });
+
+        BudgetSummaryDTO currentStatus = budgetTrackingService.getBudgetSummary(tripId);
+
+        return new BudgetForecastDTO(
+            totalBudget,
+            days,
+            trip.getTravelStyle() != null ? trip.getTravelStyle().name() : "SOLO",
+            totalBudget.divide(BigDecimal.valueOf(Math.max(days, 1)), 2, RoundingMode.HALF_UP),
+            amounts,
+            percentages,
+            tips,
+            currentStatus
+        );
+    }
+
+    private String generateTip(BudgetCategory category, BigDecimal amount, int days) {
+        BigDecimal perDay = amount.divide(BigDecimal.valueOf(days), 0, RoundingMode.HALF_UP);
+        
+        return switch (category) {
+            case ACCOMMODATION -> "Target hotels under €" + perDay + "/night";
+            case FOOD_DINING -> "Budget ~€" + perDay + "/day for meals";
+            case ACTIVITIES_ATTRACTIONS -> "Allocate ~€" + perDay + "/day for paid attractions";
+            case TRANSPORTATION -> "Set aside €" + perDay + "/day for local transport";
+            case EMERGENCY_BUFFER -> "Keep €" + amount + " as safety net";
+            default -> "Plan ~€" + perDay + "/day for this category";
+        };
     }
 
     public TripResponse getResponseById(Long id) {

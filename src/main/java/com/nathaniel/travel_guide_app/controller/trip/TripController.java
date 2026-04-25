@@ -1,9 +1,9 @@
 package com.nathaniel.travel_guide_app.controller.trip;
 
 import java.util.List;
-
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import com.nathaniel.travel_guide_app.dto.DTOs.BudgetForecastDTO;
 import com.nathaniel.travel_guide_app.dto.request.trip.TripRequest;
 import com.nathaniel.travel_guide_app.dto.response.trip.TripResponse;
 import com.nathaniel.travel_guide_app.entity.Trip;
@@ -24,7 +24,7 @@ public class TripController {
         return tripService.createTrip(request);
     }
 
-    // ✅ Main endpoint for your planner flow
+    //Main endpoint for your planner flow
     @PostMapping("/generate")
     public TripResponse generateTrip(@RequestBody TripRequest request) {
         return tripService.generateTrip(request);
@@ -72,5 +72,10 @@ public class TripController {
     @DeleteMapping("/{id}")
     public void deleteTrip(@PathVariable Long id) {
         tripService.deleteTrip(id);
+    }
+
+    @GetMapping("/{tripId}/budget-forecast")   // ← METHOD LEVEL
+    public ResponseEntity<BudgetForecastDTO> getBudgetForecast(@PathVariable Long tripId) {
+        return ResponseEntity.ok(tripService.getBudgetForecast(tripId));
     }
 }

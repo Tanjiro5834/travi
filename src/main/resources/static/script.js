@@ -1124,7 +1124,7 @@ function initPlanner() {
     editActivityForm.addEventListener("submit", handleUpdateActivity);
   }
 
-  ["tripModal", "itineraryModal", "activityModal", "editActivityModal"].forEach((modalId) => {
+  ["tripModal", "itineraryModal", "editActivityModal"].forEach((modalId) => {
     const modal = $(modalId);
     if (!modal) return;
 
@@ -1188,6 +1188,7 @@ async function handleCreatePlan(e) {
   const peopleCount = Number($("tripPeopleCount").value || 1);
   const representativeName = $("tripRepresentativeName").value.trim();
   const notes = $("tripNotes").value.trim();
+  const totalBudget = parseFloat($("tripTotalBudget").value) || null; //added
 
   if (!destinationId || !numberOfDays) {
     showToast("Please select a country and number of days.", "error");
@@ -1204,6 +1205,7 @@ async function handleCreatePlan(e) {
     peopleCount,
     representativeName,
     travelStyle,
+    totalBudget, //added
     notes,
   };
 
@@ -1360,7 +1362,11 @@ async function openItinerary(tripId) {
       await loadTripBudget(countryId);
     }
 
-    //$("itineraryModal").classList.remove("hidden");
+    if (trip.totalBudget && trip.totalBudget > 0) {
+      await loadBudgetForecast(tripId);
+    } else if (countryId) {
+      await loadTripBudget(countryId);
+    }
   } catch (err) {
     console.error(err);
     showToast("Could not open itinerary.", "error");
@@ -1369,6 +1375,19 @@ async function openItinerary(tripId) {
 
 function closeItineraryModal() {
   $("itineraryModal").classList.add("hidden");
+}
+
+async function loadBudgetForecast(tripId) {
+  try {
+    const forecast = await apiFetch(`/trips/${tripId}/budget-forecast`);
+    renderBudgetForecast(forecast);
+  } catch (err) {
+    console.warn("Budget forecast not available:", err.message);
+    // Fall back to the old budget display
+    if (currentPlannerDestinationId) {
+      await loadTripBudget(currentPlannerDestinationId);
+    }
+  }
 }
 
 function renderItinerary(trip, days = []) {
@@ -1553,7 +1572,9 @@ async function handleAddDay() {
 
 async function openActivityModal(tripDayId) {
   $("activityTripDayId").value = tripDayId;
+  $("editActivityId").value = ""; // create mode
   $("activityForm").reset();
+  $("editActivityTripDayId").value = tripDayId; // re-set after reset
   $("activityTripDayId").value = tripDayId;
 
   await populateActivityPlaces();
@@ -1800,35 +1821,58 @@ async function populateEditActivityPlaces(selectedPlaceId = null) {
 async function handleUpdateActivity(e) {
   e.preventDefault();
 
-  const payload = {
-    placeId: Number($("editActivityPlaceId").value),
-    startTime: $("editActivityStartTime").value,
-    endTime: $("editActivityEndTime").value,
-    notes: $("editActivityNotes").value.trim(),
-  };
+  const activityId = $("editActivityId").value ? Number($("editActivityId").value) : null;
+  const tripDayId = $("editActivityTripDayId").value ? Number($("editActivityTripDayId").value) : null;
+  const placeId = Number($("editActivityPlaceId").value);
+  const startTime = $("editActivityStartTime").value;
+  const endTime = $("editActivityEndTime").value;
+  const notes = $("editActivityNotes").value.trim();
 
-  const activityId = Number($("editActivityId").value);
-
-  if (!activityId || !payload.placeId || !payload.startTime || !payload.endTime) {
-    showToast("Please complete the edit form.", "error");
+  // Validate required fields
+  if (!placeId || !startTime || !endTime) {
+    showToast("Please complete the form.", "error");
     return;
   }
 
+  // Must have either activityId (update) or tripDayId (create)
+  if (!activityId && !tripDayId) {
+    showToast("Missing activity or day information.", "error");
+    return;
+  }
+
+  const payload = {
+    placeId: placeId,
+    startTime: startTime,
+    endTime: endTime,
+    notes: notes,
+  };
+
   try {
-    await apiFetch(`/trip-activities/${activityId}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+    if (!activityId && tripDayId) {
+      // CREATE — no activityId, but we have a tripDayId
+      payload.tripDayId = tripDayId;
+      await apiFetch("/trip-activities", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      showToast("Activity added.", "success");
+    } else {
+      // UPDATE — activityId exists
+      await apiFetch(`/trip-activities/${activityId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      showToast("Activity updated.", "success");
+    }
 
     closeEditActivityModal();
-    showToast("Activity updated.", "success");
 
     if (currentPlannerTrip?.id) {
       await openItinerary(currentPlannerTrip.id);
     }
   } catch (err) {
     console.error(err);
-    showToast("Could not update activity.", "error");
+    showToast("Could not save activity.", "error");
   }
 }
 
@@ -1906,6 +1950,139 @@ function formatMoneyRange(currency, min, max) {
 
 function formatNumber(value) {
   return Number(value).toLocaleString("en-PH", {
+    maximumFractionDigits: 0
+  });
+}
+
+// ============ SMART BUDGET FORECAST RENDERING ============
+
+const BUDGET_CATEGORY_CONFIG = {
+  ACCOMMODATION:         { icon: "🏨", label: "Accommodation", barClass: "bar-accommodation" },
+  FOOD_DINING:           { icon: "🍽️", label: "Food & Dining", barClass: "bar-food" },
+  ACTIVITIES_ATTRACTIONS: { icon: "🎫", label: "Activities", barClass: "bar-activities" },
+  TRANSPORTATION:        { icon: "🚇", label: "Transport", barClass: "bar-transport" },
+  SHOPPING:              { icon: "🛍️", label: "Shopping", barClass: "bar-shopping" },
+  MISCELLANEOUS:         { icon: "📦", label: "Miscellaneous", barClass: "bar-misc" },
+  EMERGENCY_BUFFER:      { icon: "🆘", label: "Emergency Buffer", barClass: "bar-buffer" }
+};
+
+function renderBudgetForecast(forecast) {
+  const container = document.getElementById("tripBudgetSummary");
+  if (!container || !forecast) return;
+
+  if (!forecast.totalBudget || forecast.totalBudget === 0) {
+    container.innerHTML = `
+      <div class="trip-budget-summary" style="background: linear-gradient(135deg, #0f172a, #1e3a8a); color: #fff; padding: 28px; border-radius: var(--radius-xl); text-align: center;">
+        <div style="font-size: 2rem; margin-bottom: 12px;">💰</div>
+        <h3 style="font-family: var(--font-display); margin-bottom: 8px;">Set Your Budget</h3>
+        <p style="color: rgba(255,255,255,0.6);">Add a total budget to see smart allocation suggestions.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const totalBudget = forecast.totalBudget || 0;
+  const allocations = forecast.allocatedAmounts || {};
+  const percentages = forecast.allocatedPercentages || {};
+  const tips = forecast.tips || {};
+  const status = forecast.currentStatus || {};
+  const travelStyle = forecast.travelStyle || "SOLO";
+  const dailyBudget = forecast.dailyBudget || 0;
+  const numberOfDays = forecast.numberOfDays || 1;
+
+  // Status badge
+  const statusClass = getStatusClass(status.statusMessage);
+  const statusLabel = formatStatusLabel(status.statusMessage);
+
+  // Build allocation rows
+  const allocationRows = Object.entries(BUDGET_CATEGORY_CONFIG)
+    .filter(([key]) => allocations[key] != null)
+    .map(([key, config]) => {
+      const amount = allocations[key] || 0;
+      const percent = percentages[key] || 0;
+      const percentDisplay = (parseFloat(percent) * 100).toFixed(0);
+      const maxAllocation = Math.max(...Object.values(allocations).map(a => parseFloat(a || 0)), 1);
+      const barWidth = maxAllocation > 0 ? (parseFloat(amount) / maxAllocation) * 100 : 0;
+
+      return `
+        <div class="budget-allocation-item">
+          <div class="budget-allocation-icon">${config.icon}</div>
+          <div class="budget-allocation-info">
+            <div class="budget-allocation-label">
+              <span>${config.label}</span>
+              <span>
+                ${formatCurrency(amount)}
+                <span class="budget-allocation-percent">(${percentDisplay}%)</span>
+              </span>
+            </div>
+            <div class="budget-allocation-bar-bg">
+              <div class="budget-allocation-bar-fill ${config.barClass}" style="width: ${barWidth}%"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+  // Build tips rows
+  const tipRows = Object.entries(tips)
+    .map(([key, tip]) => `<div class="budget-tip-item">${escapeText(tip)}</div>`)
+    .join("");
+
+  container.innerHTML = `
+    <div class="budget-forecast">
+      <div class="budget-forecast-header">
+        <div>
+          <div class="budget-eyebrow">Smart Budget Allocation</div>
+          <h3>${escapeText(travelStyle)} Travel • ${numberOfDays} Days</h3>
+        </div>
+        <div class="budget-total-display">
+          <div class="budget-total-amount">${formatCurrency(totalBudget)}</div>
+          <div class="budget-total-label">
+            ${formatCurrency(dailyBudget)} / day
+            <span class="budget-status-badge budget-status-${statusClass}">${statusLabel}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="budget-allocation-list">
+        ${allocationRows}
+      </div>
+
+      ${tipRows ? `
+        <div class="budget-forecast-tips">
+          <h4>💡 Smart Tips</h4>
+          <div class="budget-forecast-tips-grid">
+            ${tipRows}
+          </div>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function getStatusClass(statusMessage) {
+  if (!statusMessage) return "healthy";
+  const s = statusMessage.toUpperCase();
+  if (s.includes("OVER")) return "over";
+  if (s.includes("CRITICAL")) return "critical";
+  return "healthy";
+}
+
+function formatStatusLabel(statusMessage) {
+  if (!statusMessage) return "On Track";
+  const s = statusMessage.toUpperCase();
+  if (s.includes("OVER_BUDGET")) return "Over Budget";
+  if (s.includes("CRITICAL")) return "Almost Out";
+  if (s.includes("HEALTHY")) return "On Track";
+  if (s.includes("NO_BUDGET")) return "No Budget Set";
+  return escapeText(statusMessage);
+}
+
+function formatCurrency(amount) {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "₱0";
+  return "₱" + num.toLocaleString("en-PH", {
+    minimumFractionDigits: 0,
     maximumFractionDigits: 0
   });
 }
