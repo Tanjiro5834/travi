@@ -1386,36 +1386,32 @@ function renderItinerary(trip, days = []) {
 }
 
 function renderItineraryDay(day) {
-  //const activities = Array.isArray(day.activities) ? day.activities : [];
-  const activities =
-  day.activities ||
-  day.tripActivities ||
-  day.trip_activities ||
-  [];
+  const activities = day.activities || day.tripActivities || day.trip_activities || [];
 
   return `
-    <article class="itinerary-day-card">
+    <article class="itinerary-day-card itinerary-timeline-day">
       <div class="day-card-header">
         <div>
           <h3>Day ${day.dayNumber}</h3>
           <div class="day-date">${formatDateText(day.date)}</div>
         </div>
 
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="day-actions">
           <span class="trip-status">Generated</span>
+          <button class="btn-outline-sm" onclick="openActivityModal(${day.id})">+ Activity</button>
         </div>
       </div>
 
       ${day.notes ? `<p class="trip-notes">${escapeText(day.notes)}</p>` : ""}
 
-      <div class="activity-list">
+      <div class="activity-timeline">
         ${
           activities.length
             ? activities
                 .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
                 .map(renderActivityCard)
                 .join("")
-            : `<p class="trip-notes">No activities yet.</p>`
+            : `<div class="empty-day-activity">No activities yet. Add one manually.</div>`
         }
       </div>
     </article>
@@ -1423,30 +1419,43 @@ function renderItineraryDay(day) {
 }
 
 function renderActivityCard(activity) {
-  const placeName =
-    activity.placeName ||
-    activity.place?.name ||
-    "Selected place";
+  const placeName = activity.placeName || activity.place?.name || "Selected place";
 
   return `
-    <div class="activity-card">
-      <div class="activity-time">
-        ${activity.startTime || "—"} - ${activity.endTime || "—"}
-      </div>
+    <div class="activity-card timeline-activity-card">
+      <div class="activity-dot"></div>
 
-      <strong>${escapeText(activity.title || placeName)}</strong>
+      <div class="activity-main">
+        <div class="activity-top">
+          <div>
+            <div class="activity-time">
+              ${activity.startTime || "—"} - ${activity.endTime || "—"}
+            </div>
+            <strong>${escapeText(activity.title || placeName)}</strong>
+          </div>
 
-      ${
-        activity.notes
-          ? `<div class="activity-notes">${escapeText(activity.notes)}</div>`
-          : ""
-      }
+          <div class="activity-actions">
+            <button class="activity-action-btn" onclick="openEditActivityModal(${activity.id})">
+              Edit
+            </button>
+            <button class="activity-action-btn danger" onclick="deleteTripActivity(${activity.id})">
+              Delete
+            </button>
+          </div>
+        </div>
 
-      <div style="margin-top:10px;">
-        <button class="btn-outline-sm" onclick="deleteTripActivity(${activity.id})">Delete</button>
+        ${
+          activity.notes
+            ? `<div class="activity-notes">${escapeText(activity.notes)}</div>`
+            : `<div class="activity-notes muted">No notes added.</div>`
+        }
       </div>
     </div>
   `;
+}
+
+function openEditActivityModal(activityId) {
+  showToast("Edit activity UI coming next.", "info");
 }
 
 async function handleAddDay() {

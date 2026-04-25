@@ -2226,3 +2226,129 @@ img {
     padding: 26px 20px;
   }
 }
+
+.day-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.itinerary-timeline-day {
+  padding: 24px;
+  overflow: hidden;
+}
+
+.activity-timeline {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.activity-timeline::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--border);
+}
+
+.timeline-activity-card {
+  position: relative;
+  display: flex;
+  gap: 18px;
+  padding: 18px 18px 18px 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.activity-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 5px solid var(--card);
+  box-shadow: 0 0 0 1px var(--border);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.activity-main {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  transition: var(--transition-fast);
+}
+
+.activity-main:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.activity-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.activity-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.activity-action-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.activity-action-btn:hover {
+  background: var(--primary);
+  color: var(--card);
+}
+
+.activity-action-btn.danger {
+  color: #dc2626;
+}
+
+.activity-action-btn.danger:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.activity-notes.muted {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.empty-day-activity {
+  margin-left: 46px;
+  padding: 18px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  background: var(--bg);
+}
+
+@media (max-width: 700px) {
+  .activity-top {
+    flex-direction: column;
+  }
+
+  .day-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
