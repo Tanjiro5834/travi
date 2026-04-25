@@ -534,6 +534,45 @@
       </div>
     </div>
 
+    <div class="planner-modal-backdrop hidden" id="editActivityModal">
+      <form class="planner-modal" id="editActivityForm">
+        <button type="button" class="planner-modal-close" id="closeEditActivityModal">
+          ✕
+        </button>
+
+        <div class="planner-step">Edit Activity</div>
+        <h2>Update itinerary activity</h2>
+
+        <input type="hidden" id="editActivityId" />
+
+        <label>Place</label>
+        <select id="editActivityPlaceId" required></select>
+
+        <div class="planner-form-grid">
+          <div>
+            <label>Start time</label>
+            <input id="editActivityStartTime" type="time" required />
+          </div>
+
+          <div>
+            <label>End time</label>
+            <input id="editActivityEndTime" type="time" required />
+          </div>
+        </div>
+
+        <label>Notes</label>
+        <textarea
+          id="editActivityNotes"
+          rows="3"
+          placeholder="Add notes for this activity..."
+        ></textarea>
+
+        <button class="btn-primary-sm planner-submit" type="submit">
+          Save Changes
+        </button>
+      </form>
+    </div>
+
     <!-- FOOTER -->
     <footer class="footer">
       <div class="footer-inner">

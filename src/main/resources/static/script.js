@@ -1085,6 +1085,8 @@ function initPlanner() {
   const closeTripBtn = $("closeTripModal");
   const closeItineraryBtn = $("closeItineraryModal");
   const planTripBtn = $("planTripBtn");
+  const closeEditActivityBtn = $("closeEditActivityModal");
+  const editActivityForm = $("editActivityForm");
 
   if (newTripBtn) {
     newTripBtn.addEventListener("click", () => openPlannerModal());
@@ -1109,7 +1111,15 @@ function initPlanner() {
     });
   }
 
-  ["tripModal", "itineraryModal"].forEach((modalId) => {
+  if (closeEditActivityBtn) {
+    closeEditActivityBtn.addEventListener("click", closeEditActivityModal);
+  }
+
+  if (editActivityForm) {
+    editActivityForm.addEventListener("submit", handleUpdateActivity);
+  }
+
+  ["tripModal", "itineraryModal", "activityModal", "editActivityModal"].forEach((modalId) => {
     const modal = $(modalId);
     if (!modal) return;
 
@@ -1435,12 +1445,14 @@ function renderActivityCard(activity) {
           </div>
 
           <div class="activity-actions">
-            <button class="activity-action-btn" onclick="openEditActivityModal(${activity.id})">
-              Edit
-            </button>
-            <button class="activity-action-btn danger" onclick="deleteTripActivity(${activity.id})">
-              Delete
-            </button>
+            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn-outline-sm" onclick="openEditActivityModal(${activity.id})">
+                Edit
+              </button>
+              <button class="btn-outline-sm" onclick="deleteTripActivity(${activity.id})">
+                Delete
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1649,4 +1661,123 @@ function escapeText(value) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+
+function findActivityById(activityId) {
+  for (const day of currentPlannerDays) {
+    const activities =
+      day.activities ||
+      day.tripActivities ||
+      day.trip_activities ||
+      [];
+
+    const activity = activities.find(
+      (item) => Number(item.id) === Number(activityId)
+    );
+
+    if (activity) return activity;
+  }
+
+  return null;
+}
+
+async function openEditActivityModal(activityId) {
+  const activity = findActivityById(activityId);
+
+  if (!activity) {
+    showToast("Activity not found.", "error");
+    return;
+  }
+
+  $("editActivityId").value = activity.id;
+  $("editActivityStartTime").value = normalizeTime(activity.startTime);
+  $("editActivityEndTime").value = normalizeTime(activity.endTime);
+  $("editActivityNotes").value = activity.notes || "";
+
+  await populateEditActivityPlaces(activity.placeId || activity.place?.id);
+
+  $("editActivityModal").classList.remove("hidden");
+}
+
+function closeEditActivityModal() {
+  $("editActivityModal").classList.add("hidden");
+}
+
+async function populateEditActivityPlaces(selectedPlaceId = null) {
+  const select = $("editActivityPlaceId");
+  if (!select) return;
+
+  select.innerHTML = `<option value="">Loading places...</option>`;
+
+  try {
+    const countryId =
+      currentPlannerTrip?.countryId ||
+      currentPlannerTrip?.country?.id ||
+      currentCountryId;
+
+    if (!countryId) {
+      throw new Error("Country ID missing");
+    }
+
+    const places = await apiFetch(`/places/country/${countryId}`);
+
+    select.innerHTML = places.length
+      ? places
+          .map(
+            (place) => `
+              <option value="${place.id}" ${
+                Number(selectedPlaceId) === Number(place.id) ? "selected" : ""
+              }>
+                ${escapeText(place.name)}
+              </option>
+            `
+          )
+          .join("")
+      : `<option value="">No places available</option>`;
+  } catch (err) {
+    console.error(err);
+    select.innerHTML = `<option value="">Could not load places</option>`;
+    showToast("Could not load places.", "error");
+  }
+}
+
+async function handleUpdateActivity(e) {
+  e.preventDefault();
+
+  const payload = {
+    placeId: Number($("editActivityPlaceId").value),
+    startTime: $("editActivityStartTime").value,
+    endTime: $("editActivityEndTime").value,
+    notes: $("editActivityNotes").value.trim(),
+  };
+
+  const activityId = Number($("editActivityId").value);
+
+  if (!activityId || !payload.placeId || !payload.startTime || !payload.endTime) {
+    showToast("Please complete the edit form.", "error");
+    return;
+  }
+
+  try {
+    await apiFetch(`/trip-activities/${activityId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+
+    closeEditActivityModal();
+    showToast("Activity updated.", "success");
+
+    if (currentPlannerTrip?.id) {
+      await openItinerary(currentPlannerTrip.id);
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("Could not update activity.", "error");
+  }
+}
+
+function normalizeTime(value) {
+  if (!value) return "";
+  return String(value).slice(0, 5);
 }
