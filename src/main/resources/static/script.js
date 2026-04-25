@@ -1087,6 +1087,7 @@ function initPlanner() {
   const planTripBtn = $("planTripBtn");
   const closeEditActivityBtn = $("closeEditActivityModal");
   const editActivityForm = $("editActivityForm");
+  const budgetTierSelect = $("budgetTierSelect");
 
   if (newTripBtn) {
     newTripBtn.addEventListener("click", () => openPlannerModal());
@@ -1102,6 +1103,10 @@ function initPlanner() {
 
   if (closeItineraryBtn) {
     closeItineraryBtn.addEventListener("click", closeItineraryModal);
+  }
+
+  if (budgetTierSelect) {
+    budgetTierSelect.addEventListener("change", renderTripBudget);
   }
 
   if (planTripBtn) {
@@ -1338,14 +1343,24 @@ async function openItinerary(tripId) {
 
     currentPlannerTrip = trip;
     currentPlannerDays = Array.isArray(days) ? days : [];
-    currentPlannerDestinationId =
-  trip.countryId ||
-  trip.destinationId ||
-  trip.country?.id ||
-  trip.destination?.id;
+
+    const countryId =
+      trip.countryId ||
+      trip.country?.id ||
+      trip.destinationId ||
+      trip.destination?.id;
+
+    currentPlannerDestinationId = countryId;
 
     renderItinerary(trip, currentPlannerDays);
+
     $("itineraryModal").classList.remove("hidden");
+
+    if (countryId) {
+      await loadTripBudget(countryId);
+    }
+
+    //$("itineraryModal").classList.remove("hidden");
   } catch (err) {
     console.error(err);
     showToast("Could not open itinerary.", "error");
@@ -1371,9 +1386,43 @@ function renderItinerary(trip, days = []) {
       ${trip.notes ? `<p style="margin-top:10px">${escapeText(trip.notes)}</p>` : ""}
     </div>
 
+    <!--ADD BUDGET HERE-->
+    <div class="trip-budget-summary" id="tripBudgetSummary">
+      <div class="budget-summary-header">
+        <div>
+          <span class="budget-eyebrow">Estimated Budget</span>
+          <h3>Trip cost estimate</h3>
+        </div>
+
+        <select id="budgetTierSelect">
+          <option value="BUDGET">Budget</option>
+          <option value="MID_RANGE" selected>Mid-range</option>
+          <option value="LUXURY">Luxury</option>
+        </select>
+      </div>
+
+      <div class="budget-summary-grid">
+        <div>
+          <span>Per day</span>
+          <strong id="budgetPerDay">—</strong>
+        </div>
+
+        <div>
+          <span>Total trip</span>
+          <strong id="budgetTotal">—</strong>
+        </div>
+
+        <div>
+          <span>Per person</span>
+          <strong id="budgetPerPerson">—</strong>
+        </div>
+      </div>
+
+      <p id="budgetSavingTips" class="budget-saving-tips"></p>
+    </div>
+
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:18px;">
       <h3 style="font-family:var(--font-display); color:var(--primary-dark);">Itinerary</h3>
-      
     </div>
 
     <div class="itinerary-days">
@@ -1393,6 +1442,12 @@ function renderItinerary(trip, days = []) {
       }
     </div>
   `;
+
+  // ✅ IMPORTANT: rebind event AFTER render
+  const select = $("budgetTierSelect");
+  if (select) {
+    select.addEventListener("change", renderTripBudget);
+  }
 }
 
 function renderItineraryDay(day) {
@@ -1780,4 +1835,77 @@ async function handleUpdateActivity(e) {
 function normalizeTime(value) {
   if (!value) return "";
   return String(value).slice(0, 5);
+}
+
+
+let currentBudgetGuide = null;
+
+async function loadTripBudget(countryId) {
+  try {
+    currentBudgetGuide = await apiFetch(`/budgets/country/${countryId}`);
+    renderTripBudget();
+  } catch (err) {
+    console.warn("No budget guide found for country:", countryId);
+
+    currentBudgetGuide = null;
+
+    if ($("budgetPerDay")) $("budgetPerDay").textContent = "No data";
+    if ($("budgetTotal")) $("budgetTotal").textContent = "No data";
+    if ($("budgetPerPerson")) $("budgetPerPerson").textContent = "No data";
+    if ($("budgetSavingTips")) {
+      $("budgetSavingTips").textContent =
+        "Budget estimate is not available for this country yet.";
+    }
+  }
+}
+
+function renderTripBudget() {
+  if (!currentBudgetGuide || !currentPlannerTrip) return;
+
+  const selectedTier = $("budgetTierSelect")?.value || "MID_RANGE";
+  const tier = currentBudgetGuide.tiers.find(t => t.tierName === selectedTier);
+
+  if (!tier) return;
+
+  const days = currentPlannerDays.length || currentPlannerTrip.numberOfDays || 1;
+  const people = currentPlannerTrip.peopleCount || 1;
+
+  const perDayMin = Number(tier.dailyTotalMin);
+  const perDayMax = Number(tier.dailyTotalMax);
+
+  const totalMin = perDayMin * days * people;
+  const totalMax = perDayMax * days * people;
+
+  const perPersonMin = perDayMin * days;
+  const perPersonMax = perDayMax * days;
+
+  $("budgetPerDay").textContent = formatMoneyRange(
+    currentBudgetGuide.currency,
+    perDayMin,
+    perDayMax
+  );
+
+  $("budgetTotal").textContent = formatMoneyRange(
+    currentBudgetGuide.currency,
+    totalMin,
+    totalMax
+  );
+
+  $("budgetPerPerson").textContent = formatMoneyRange(
+    currentBudgetGuide.currency,
+    perPersonMin,
+    perPersonMax
+  );
+
+  $("budgetSavingTips").textContent = currentBudgetGuide.savingTips || "";
+}
+
+function formatMoneyRange(currency, min, max) {
+  return `${currency} ${formatNumber(min)} - ${formatNumber(max)}`;
+}
+
+function formatNumber(value) {
+  return Number(value).toLocaleString("en-PH", {
+    maximumFractionDigits: 0
+  });
 }

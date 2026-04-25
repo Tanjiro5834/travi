@@ -7,6 +7,8 @@ let currentEditingId = null;
 let selectedRegion = null;
 let selectedSubRegion = null;
 
+let currentBudgetCountryId = null;
+
 /* ============ AUTH ============ */
 function getToken() {
   return localStorage.getItem("travi_token");
@@ -561,11 +563,29 @@ function renderBudgetCard(country, budget) {
       </div>
 
       <div class="budget-card-footer">
-        <button class="mini-btn primary" type="button">Edit</button>
+        <button class="mini-btn primary" type="button" onclick="openEditBudgetGuide(${country.id})">Edit</button>
         <button class="mini-btn" type="button">View</button>
       </div>
     </div>
   `;
+}
+
+async function openEditBudgetGuide(countryId) {
+  currentBudgetCountryId = countryId;
+
+  await populateCountrySelects(["budgetCountryId"]);
+
+  const budget = await apiFetch(`/budgets/country/${countryId}`);
+
+  $("budgetModalTitle").textContent = "Edit Budget Guide";
+  $("budgetForm").reset();
+
+  $("budgetCountryId").value = countryId;
+  $("budgetCountryId").disabled = true;
+  $("budgetCurrency").value = budget.currency || "";
+  $("budgetSavingTips").value = budget.savingTips || "";
+
+  openModal("budgetModal");
 }
 
 async function loadPacking() {
@@ -1783,9 +1803,14 @@ function initBudgetModal() {
   const addBtn = $("addBudgetBtn");
   if (addBtn)
     addBtn.addEventListener("click", async () => {
+      currentBudgetCountryId = null;
+
       await populateCountrySelects(["budgetCountryId"]);
       $("budgetModalTitle").textContent = "Add Budget Guide";
+
       $("budgetForm").reset();
+      $("budgetCountryId").disabled = false;
+
       openModal("budgetModal");
     });
 
@@ -1856,17 +1881,23 @@ function initBudgetModal() {
         showToast("Please select a country.", "warning");
         return;
       }
-
+      
+      const isEditing = currentBudgetCountryId !== null;
       try {
-        await apiFetch("/admin/budgets", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        await apiFetch(
+          isEditing
+            ? `/budgets/country/${currentBudgetCountryId}`
+            : "/budgets",
+          {
+            method: isEditing ? "PUT" : "POST",
+            body: JSON.stringify(payload),
+          }
+        );
 
         showToast("Budget guide saved.", "success");
         closeModal("budgetModal");
 
-        await loadBudgets(); // 🔥 important
+        await loadBudgets();
       } catch (err) {
         showToast(`Failed: ${err.message}`, "error");
       }
@@ -1926,20 +1957,41 @@ function addChecklistRow() {
   container.appendChild(row);
 }
 
+function parseBudgetRange(value) {
+  if (!value) return { min: null, max: null };
+
+  const clean = String(value)
+    .replace(/[₱$৳,]/g, "")
+    .replace(/[–—]/g, "-")
+    .trim();
+
+  if (!clean) return { min: null, max: null };
+
+  if (clean.endsWith("+")) {
+    const min = Number(clean.replace("+", "").trim());
+    return {
+      min: Number.isFinite(min) ? min : null,
+      max: null,
+    };
+  }
+
+  const parts = clean.split("-").map((part) => part.trim());
+
+  const min = Number(parts[0]);
+  const max = Number(parts[1]);
+
+  return {
+    min: Number.isFinite(min) ? min : null,
+    max: Number.isFinite(max) ? max : null,
+  };
+}
+
 function parseRangeMin(value) {
-  if (!value) return null;
-  const clean = value.replace(/[₱$,]/g, "").trim();
-  if (clean.endsWith("+")) return Number(clean.replace("+", "").trim());
-  const [min] = clean.split("–");
-  return min ? Number(min.trim()) : null;
+  return parseBudgetRange(value).min;
 }
 
 function parseRangeMax(value) {
-  if (!value) return null;
-  const clean = value.replace(/[₱$,]/g, "").trim();
-  if (clean.endsWith("+")) return null;
-  const parts = clean.split("–");
-  return parts[1] ? Number(parts[1].trim()) : null;
+  return parseBudgetRange(value).max;
 }
 
 function initChecklistModal() {
