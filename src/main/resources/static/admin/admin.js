@@ -145,6 +145,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initChecklistModal();
   initTipsModal();
   initCultureModal();
+  initPlaceModal();
 
   await bootstrapAdminPage();
 });
@@ -177,7 +178,8 @@ async function bootstrapAdminPage() {
       loadCulture().catch((err) => {
         console.warn("Culture load skipped:", err.message);
       }),
-      loadTrips().catch(err => console.warn("Trips load skipped:", err.message))
+      loadTrips().catch(err => console.warn("Trips load skipped:", err.message)),
+      loadPlaces().catch(err => console.warn("Places load skipped:", err.message))
     ]);
   } catch (err) {
     handleBootstrapError(err);
@@ -200,7 +202,7 @@ function handleBootstrapError(err) {
   }
 
   showToast("Failed to load admin data.", "error");
-  renderCountries([]);
+  if(!countries.length) renderCountries([]);
   renderActivities([]);
 }
 
@@ -907,6 +909,7 @@ function initNav() {
     packing: "packingSection",
     tips: "tipsSection",
     culture: "cultureSection",
+    places: "placesSection",
     drafts: "draftsSection",
     publish: "publishSection",
     settings: "settingsSection",
@@ -926,6 +929,10 @@ function initNav() {
       if (pageSubtitle) pageSubtitle.textContent = getSectionSubtitle(section);
 
       showSection(sectionMap[section] || "dashboardSection");
+
+      if (section === "places") {
+        loadPlaces();
+      }
     });
   });
 
@@ -960,6 +967,7 @@ function showSection(activeSectionId) {
     "packingSection",
     "tipsSection",
     "cultureSection",
+    "placesSection",
     "draftsSection",
     "publishSection",
     "settingsSection",
@@ -993,6 +1001,8 @@ function formatSectionTitle(section) {
       return "Local Tips";
     case "culture":
       return "Culture Guides";
+    case "places":
+      return "Place Management";
     case "drafts":
       return "Draft Management";
     case "publish":
@@ -2272,3 +2282,417 @@ document.addEventListener("DOMContentLoaded", () => {
   initTipsModal();
   initCultureModal();
 });
+
+/* ================================================================
+   PLACES — load, render, CRUD modal
+   API endpoints:
+     GET    /api/places/country/{id}          → all places for a country
+     POST   /api/places/admin/places          → create
+     PUT    /api/places/admin/places/{id}     → update
+     DELETE /api/places/admin/places/{id}     → delete
+     PATCH  /api/places/admin/places/{id}/publish
+     PATCH  /api/places/admin/places/{id}/unpublish
+     PATCH  /api/places/admin/places/{id}/feature
+     PATCH  /api/places/admin/places/{id}/unfeature
+================================================================ */
+
+let allPlaces = [];
+let placeCategories = [];
+let currentEditingPlaceId = null;
+let activePlaceCountryFilter = null;
+let activePlaceStatusFilter = "all";
+
+/* ── Load all places grouped by country ── */
+async function loadPlaces() {
+  const grid = $("placesGrid");
+  if (!grid) return;
+
+  const list = countries?.length ? countries : await apiFetch("/countries");
+  if (!list.length) {
+    setText("placesTotalCount", 0);
+    setText("placesPublishedCount", 0);
+    setText("placesFeaturedCount", 0);
+    grid.innerHTML = emptyState("No places found. Add countries first.");
+    return;
+  }
+
+  const results = await Promise.all(
+    list.map(async (country) => {
+      try {
+        const places = await apiFetch(`/places/country/${country.id}`);
+        return Array.isArray(places) ? places : [];
+      } catch (err) {
+        console.error(`Failed to load places for country ${country.id}:`, err);
+        return [];
+      }
+    })
+  );
+
+  allPlaces = results.flat();
+
+  // Load categories for the modal
+  try {
+    placeCategories = await apiFetch("/categories");
+  } catch {
+    placeCategories = [];
+  }
+
+  renderPlaceStats();
+  renderPlaceCountryFilters(list);
+  renderPlacesGrid();
+}
+
+function isPlacePublished(place) {
+  return place.isPublished === true || place.published === true;
+}
+
+function isPlaceFeatured(place) {
+  return place.isFeatured === true || place.featured === true;
+}
+
+function renderPlaceStats() {
+  setText("placesTotalCount", allPlaces.length);
+  setText("placesPublishedCount", allPlaces.filter(isPlacePublished).length);
+  setText("placesFeaturedCount", allPlaces.filter(isPlaceFeatured).length);
+}
+
+function renderPlaceCountryFilters(countryList) {
+  const container = $("placesCountryFilters");
+  if (!container) return;
+
+  const countriesWithPlaces = countryList.filter((c) =>
+    allPlaces.some((p) => p.country?.id === c.id || p.countryId === c.id)
+  );
+
+  container.innerHTML = `
+    <button class="filter-chip ${activePlaceCountryFilter === null ? "active" : ""}"
+      data-country-filter="all">All Countries</button>
+    ${countriesWithPlaces
+      .map(
+        (c) => `
+      <button class="filter-chip ${activePlaceCountryFilter === c.id ? "active" : ""}"
+        data-country-filter="${c.id}">${escapeHtml(c.name)}</button>
+    `
+      )
+      .join("")}
+  `;
+
+  container.querySelectorAll("[data-country-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = btn.dataset.countryFilter;
+      activePlaceCountryFilter = val === "all" ? null : Number(val);
+      container.querySelectorAll("[data-country-filter]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderPlacesGrid();
+    });
+  });
+}
+
+function renderPlacesGrid() {
+  const grid = $("placesGrid");
+  if (!grid) return;
+
+  let filtered = [...allPlaces];
+
+  if (activePlaceCountryFilter !== null) {
+    filtered = filtered.filter(
+      (p) => (p.country?.id ?? p.countryId) === activePlaceCountryFilter
+    );
+  }
+
+  if (activePlaceStatusFilter === "published") {
+    filtered = filtered.filter(isPlacePublished);
+  } else if (activePlaceStatusFilter === "draft") {
+    filtered = filtered.filter((p) => !isPlacePublished(p));
+  } else if (activePlaceStatusFilter === "featured") {
+    filtered = filtered.filter(isPlaceFeatured);
+  }
+
+  if (!filtered.length) {
+    grid.innerHTML = emptyState("No places match the current filter.");
+    return;
+  }
+
+  grid.innerHTML = filtered.map(renderPlaceCard).join("");
+
+  // Bind action buttons
+  grid.querySelectorAll("[data-place-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const action = btn.dataset.placeAction;
+      const id = Number(btn.dataset.id);
+      if (action === "edit") await openEditPlaceModal(id);
+      else if (action === "delete") await handleDeletePlace(id);
+      else if (action === "publish") await handlePlacePublish(id, true);
+      else if (action === "unpublish") await handlePlacePublish(id, false);
+      else if (action === "feature") await handlePlaceFeature(id, true);
+      else if (action === "unfeature") await handlePlaceFeature(id, false);
+    });
+  });
+}
+
+function renderPlaceCard(place) {
+  const name = escapeHtml(place.name || "Unknown");
+  const country = escapeHtml(place.countryName || place.country?.name || "—");
+  const category = escapeHtml(place.categoryName || place.category?.name || "—");
+  const description = escapeHtml(place.description || "No description provided.");
+  const cost = place.estimatedCost != null ? `₱${Number(place.estimatedCost).toLocaleString()}` : "—";
+  const duration = place.recommendedDurationMinutes != null
+    ? `${place.recommendedDurationMinutes} min`
+    : "—";
+  const hours = escapeHtml(place.openingHours || "—");
+
+  const publishedBadge = place.isPublished(place)
+    ? `<span class="badge badge-success">Published</span>`
+    : `<span class="badge badge-warning">Draft</span>`;
+
+  const featuredBadge = place.isFeatured(place)
+    ? `<span class="badge badge-success" style="background:#fef3c7;color:#92400e;">⭐ Featured</span>`
+    : "";
+
+  const publishToggleBtn = place.isPublished(place)
+    ? `<button class="mini-btn" data-place-action="unpublish" data-id="${place.id}">Unpublish</button>`
+    : `<button class="mini-btn" data-place-action="publish" data-id="${place.id}">Publish</button>`;
+
+  const featureToggleBtn = place.isFeatured(place)
+    ? `<button class="mini-btn" data-place-action="unfeature" data-id="${place.id}">Unfeature</button>`
+    : `<button class="mini-btn" data-place-action="feature" data-id="${place.id}">Feature</button>`;
+
+  return `
+    <div class="req-card">
+      <div class="req-card-top">
+        <div class="req-flag" style="font-size:1.5rem;">📍</div>
+        <div class="req-meta">
+          <h4>${name}</h4>
+          <p>${country} · ${category}</p>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+          ${publishedBadge}
+          ${featuredBadge}
+        </div>
+      </div>
+      <p style="font-size:0.83rem;color:var(--text-secondary);line-height:1.5;">${description}</p>
+      <div class="req-tags">
+        <span class="req-tag">💰 ${cost}</span>
+        <span class="req-tag">⏱ ${duration}</span>
+        <span class="req-tag">🕐 ${hours}</span>
+      </div>
+      <div class="req-actions">
+        <button class="mini-btn primary" data-place-action="edit" data-id="${place.id}">Edit</button>
+        ${publishToggleBtn}
+        ${featureToggleBtn}
+        <button class="mini-btn" data-place-action="delete" data-id="${place.id}"
+          style="color:#991b1b;border-color:#fca5a5;">Delete</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ── Status / Feature toggle handlers ── */
+async function handlePlacePublish(id, publish) {
+  try {
+    const endpoint = publish
+      ? `/places/admin/${id}/publish`
+      : `/places/admin/${id}/unpublish`;
+    const updated = await apiFetch(endpoint, { method: "PATCH" });
+    const idx = allPlaces.findIndex((p) => p.id === id);
+    if (idx !== -1) allPlaces[idx] = { ...allPlaces[idx], ...updated };
+    renderPlaceStats();
+    renderPlacesGrid();
+    showToast(publish ? "Place published." : "Place unpublished.", "success");
+  } catch (err) {
+    showToast(`Failed: ${err.message}`, "error");
+  }
+}
+
+async function handlePlaceFeature(id, feature) {
+  try {
+    const endpoint = feature
+      ? `/places/admin/${id}/feature`
+      : `/places/admin/${id}/unfeature`;
+    const updated = await apiFetch(endpoint, { method: "PATCH" });
+    const idx = allPlaces.findIndex((p) => p.id === id);
+    if (idx !== -1) allPlaces[idx] = { ...allPlaces[idx], ...updated };
+    renderPlaceStats();
+    renderPlacesGrid();
+    showToast(feature ? "Place featured." : "Place unfeatured.", "success");
+  } catch (err) {
+    showToast(`Failed: ${err.message}`, "error");
+  }
+}
+
+function renderPlaceCard(place) {
+  return `
+    <div class="req-card">
+      <div class="req-card-top">
+        <div class="req-flag">📍</div>
+        <div class="req-meta">
+          <h4>${escapeHtml(place.name)}</h4>
+          <p>${escapeHtml(place.countryName || "Unknown")} · ${escapeHtml(place.categoryName || "Uncategorized")}</p>
+        </div>
+      </div>
+
+      <p>${escapeHtml(place.description || "")}</p>
+
+      <div class="req-tags">
+        <span class="req-tag">${isPlacePublished(place) ? "Published" : "Draft"}</span>
+        ${isPlaceFeatured(place) ? `<span class="req-tag">Featured</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+async function handleDeletePlace(id) {
+  if (!confirm("Delete this place? This cannot be undone.")) return;
+  try {
+    await apiFetch(`/places/admin/${id}`, { method: "DELETE" });
+    allPlaces = allPlaces.filter((p) => p.id !== id);
+    renderPlaceStats();
+    renderPlacesGrid();
+    showToast("Place deleted.", "success");
+  } catch (err) {
+    showToast(`Failed to delete: ${err.message}`, "error");
+  }
+}
+
+/* ── Modal helpers ── */
+async function populateCategorySelect() {
+  const sel = $("placeCategoryId");
+  if (!sel) return;
+
+  let cats = placeCategories;
+  if (!cats.length) {
+    try {
+      cats = await apiFetch("/categories");
+      placeCategories = cats;
+    } catch {
+      cats = [];
+    }
+  }
+
+  sel.innerHTML = '<option value="">Select a category…</option>';
+  cats.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name || `Category #${c.id}`;
+    sel.appendChild(opt);
+  });
+}
+
+function openAddPlaceModal() {
+  currentEditingPlaceId = null;
+  $("placeModalTitle").textContent = "Add Place";
+  $("placeForm").reset();
+  openModal("placeModal");
+}
+
+async function openEditPlaceModal(id) {
+  const place = allPlaces.find((p) => p.id === id);
+  if (!place) return;
+
+  currentEditingPlaceId = id;
+  $("placeModalTitle").textContent = "Edit Place";
+
+  await populateCountrySelects(["placeCountryId"]);
+  await populateCategorySelect();
+
+  $("placeCountryId").value = place.country?.id ?? place.countryId ?? "";
+  $("placeCategoryId").value = place.category?.id ?? place.categoryId ?? "";
+  $("placeName").value = place.name || "";
+  $("placeDescription").value = place.description || "";
+  $("placeAddress").value = place.address || "";
+  $("placeLatitude").value = place.latitude ?? "";
+  $("placeLongitude").value = place.longitude ?? "";
+  $("placeEstimatedCost").value = place.estimatedCost ?? "";
+  $("placeRecommendedDuration").value = place.recommendedDurationMinutes ?? "";
+  $("placeOpeningHours").value = place.openingHours || "";
+  $("placeContactInfo").value = place.contactInfo || "";
+  $("placeIsFeatured").checked = !!place.isFeatured;
+  $("placeIsPublished").checked = !!place.isPublished;
+
+  openModal("placeModal");
+}
+
+/* ── Modal init ── */
+function initPlaceModal() {
+  // Status filter chips in Places section toolbar
+  document.querySelectorAll("[data-place-filter]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll("[data-place-filter]").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      activePlaceStatusFilter = chip.dataset.placeFilter;
+      renderPlacesGrid();
+    });
+  });
+
+  // Add button
+  const addBtn = $("addPlaceBtn");
+  if (addBtn) {
+    addBtn.addEventListener("click", async () => {
+      await populateCountrySelects(["placeCountryId"]);
+      await populateCategorySelect();
+      openAddPlaceModal();
+    });
+  }
+
+  bindModalClose("placeModal", "closePlaceModal", "cancelPlaceModal", "placeForm");
+
+  // Form submit
+  const form = $("placeForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const countryId = Number($("placeCountryId").value);
+    const categoryId = Number($("placeCategoryId").value);
+    const name = $("placeName").value.trim();
+
+    if (!countryId || !categoryId || !name) {
+      showToast("Country, category, and name are required.", "warning");
+      return;
+    }
+
+    const payload = {
+      countryId,
+      categoryId,
+      name,
+      description: $("placeDescription").value.trim() || null,
+      address: $("placeAddress").value.trim() || null,
+      latitude: $("placeLatitude").value ? parseFloat($("placeLatitude").value) : null,
+      longitude: $("placeLongitude").value ? parseFloat($("placeLongitude").value) : null,
+      estimatedCost: $("placeEstimatedCost").value ? parseFloat($("placeEstimatedCost").value) : null,
+      recommendedDurationMinutes: $("placeRecommendedDuration").value
+        ? parseInt($("placeRecommendedDuration").value)
+        : null,
+      openingHours: $("placeOpeningHours").value.trim() || null,
+      contactInfo: $("placeContactInfo").value.trim() || null,
+      isFeatured: $("placeIsFeatured").checked,
+      isPublished: $("placeIsPublished").checked,
+    };
+
+    try {
+      if (currentEditingPlaceId) {
+        const updated = await apiFetch(`/places/admin/${currentEditingPlaceId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        const idx = allPlaces.findIndex((p) => p.id === currentEditingPlaceId);
+        if (idx !== -1) allPlaces[idx] = updated;
+        showToast("Place updated.", "success");
+      } else {
+        const created = await apiFetch("/places/admin", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        allPlaces.push(created);
+        showToast("Place added.", "success");
+      }
+
+      renderPlaceStats();
+      renderPlacesGrid();
+      closeModal("placeModal");
+    } catch (err) {
+      showToast(`Failed: ${err.message}`, "error");
+    }
+  });
+}

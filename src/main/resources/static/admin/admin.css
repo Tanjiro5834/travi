@@ -1412,3 +1412,9 @@ td {
   background: #fee2e2 !important;
   color: #7f1d1d !important;
 }
+/* ── Places Section ── */
+.places-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}

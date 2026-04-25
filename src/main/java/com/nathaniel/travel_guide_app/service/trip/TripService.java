@@ -2,6 +2,8 @@ package com.nathaniel.travel_guide_app.service.trip;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -153,6 +155,17 @@ public class TripService {
 
     private void generateActivities(TripDay day, Trip trip) {
         List<Place> places = placeRepository.findByCountryId(trip.getCountry().getId());
+
+        if (places.isEmpty()) {
+            throw new RuntimeException(
+                "No published places found for: " + trip.getCountry().getName() +
+                ". Add and publish places via the admin panel first."
+            );
+        }
+
+        List<Place> shuffled = new ArrayList<>(places);
+        Collections.shuffle(shuffled);
+
         String[][] slots = pickSlots(trip.getTravelStyle());
 
         for (int i = 0; i < slots.length && i < places.size(); i++) {
@@ -161,6 +174,7 @@ public class TripService {
             TripActivity activity = new TripActivity();
             activity.setTripDay(day);
             activity.setPlace(places.get(i));
+            activity.setTitle("Visit " + places.get(i).getName()); 
             activity.setStartTime(LocalTime.parse(time[0]));
             activity.setEndTime(LocalTime.parse(time[1]));
             activity.setSortOrder(i + 1);

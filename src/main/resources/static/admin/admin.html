@@ -46,6 +46,7 @@
           >
           <a href="#" class="nav-item" data-section="tips">Local Tips</a>
           <a href="#" class="nav-item" data-section="culture">Culture Guides</a>
+          <a href="#" class="nav-item" data-section="places">Places</a>
         </div>
 
         <div class="nav-group">
@@ -517,6 +518,50 @@
           </div>
 
           <div class="culture-grid" id="cultureGrid"></div>
+        </section>
+
+        <!-- =========================
+           PLACES SECTION
+      ========================== -->
+        <section id="placesSection" style="display: none">
+          <div class="section-stats">
+            <div class="section-stat">
+              <div class="section-stat-icon">📍</div>
+              <div class="section-stat-text">
+                <span>Total Places</span>
+                <strong id="placesTotalCount">0</strong>
+              </div>
+            </div>
+            <div class="section-stat">
+              <div class="section-stat-icon">✅</div>
+              <div class="section-stat-text">
+                <span>Published</span>
+                <strong id="placesPublishedCount">0</strong>
+              </div>
+            </div>
+            <div class="section-stat">
+              <div class="section-stat-icon">⭐</div>
+              <div class="section-stat-text">
+                <span>Featured</span>
+                <strong id="placesFeaturedCount">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-toolbar">
+            <div class="section-toolbar-left">
+              <button class="filter-chip active" data-place-filter="all">All</button>
+              <button class="filter-chip" data-place-filter="published">Published</button>
+              <button class="filter-chip" data-place-filter="draft">Draft</button>
+              <button class="filter-chip" data-place-filter="featured">Featured</button>
+            </div>
+            <button class="btn btn-primary" id="addPlaceBtn">+ Add Place</button>
+          </div>
+
+          <!-- Country filter pills (populated dynamically) -->
+          <div id="placesCountryFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;"></div>
+
+          <div class="req-grid" id="placesGrid"></div>
         </section>
 
         <!-- =========================
@@ -1206,6 +1251,101 @@
             <button type="submit" class="btn btn-primary" id="saveCultureBtn">
               Save Culture Guide
             </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ================================
+       MODAL: ADD / EDIT PLACE
+  ================================= -->
+    <div id="placeModal" class="modal-overlay" style="display: none">
+      <div class="modal-box modal-box-wide">
+        <div class="modal-header">
+          <h3 id="placeModalTitle">Add Place</h3>
+          <button class="modal-close" id="closePlaceModal">×</button>
+        </div>
+        <form id="placeForm" autocomplete="off">
+          <div class="modal-body">
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Country</label>
+                <select id="placeCountryId" required>
+                  <option value="">Select a country…</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Category</label>
+                <select id="placeCategoryId" required>
+                  <option value="">Select a category…</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Place Name</label>
+              <input type="text" id="placeName" placeholder="e.g. Penang Hill" required />
+            </div>
+
+            <div class="form-group">
+              <label>Description</label>
+              <textarea id="placeDescription" rows="3" placeholder="Brief description of this place for travelers…"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Address</label>
+              <input type="text" id="placeAddress" placeholder="e.g. Jalan Utama, Georgetown, Penang" />
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Latitude</label>
+                <input type="number" step="any" id="placeLatitude" placeholder="e.g. 5.4122" />
+              </div>
+              <div class="form-group">
+                <label>Longitude</label>
+                <input type="number" step="any" id="placeLongitude" placeholder="e.g. 100.2728" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Estimated Cost (PHP)</label>
+                <input type="number" step="0.01" id="placeEstimatedCost" placeholder="e.g. 500.00" />
+              </div>
+              <div class="form-group">
+                <label>Recommended Duration (minutes)</label>
+                <input type="number" id="placeRecommendedDuration" placeholder="e.g. 120" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Opening Hours</label>
+                <input type="text" id="placeOpeningHours" placeholder="e.g. 06:00–22:00 daily" />
+              </div>
+              <div class="form-group">
+                <label>Contact Info</label>
+                <input type="text" id="placeContactInfo" placeholder="e.g. +60 4-828 8880" />
+              </div>
+            </div>
+
+            <div class="form-row" style="gap:24px;margin-top:4px;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;font-weight:600;cursor:pointer;">
+                <input type="checkbox" id="placeIsFeatured" style="width:16px;height:16px;" />
+                Mark as Featured
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;font-weight:600;cursor:pointer;">
+                <input type="checkbox" id="placeIsPublished" style="width:16px;height:16px;" />
+                Publish immediately
+              </label>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="cancelPlaceModal">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="savePlaceBtn">Save Place</button>
           </div>
         </form>
       </div>

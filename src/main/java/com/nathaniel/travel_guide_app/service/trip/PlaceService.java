@@ -108,4 +108,44 @@ public class PlaceService {
         existing.setIsPublished(false);
         return placeRepository.save(existing);
     }
+
+    public List<PlaceResponse> getByCountryResponse(Long countryId) {
+        return placeRepository.findByCountryId(countryId)
+                .stream()
+                .map(placeMapper::toResponse)
+                .toList();
+    }
+
+    public PlaceResponse getResponseById(Long id) {
+        Place place = getById(id);
+        return placeMapper.toResponse(place);
+    }
+
+    public List<PlaceResponse> getResponsesByCountry(Long countryId) {
+        return placeRepository.findByCountryId(countryId)
+                .stream()
+                .map(placeMapper::toResponse)
+                .toList();
+    }
+
+    public List<PlaceResponse> getPublishedResponsesByCountry(Long countryId) {
+        return placeRepository.findByCountryIdAndIsPublishedTrue(countryId)
+                .stream()
+                .map(placeMapper::toResponse)
+                .toList();
+    }
+
+    public List<PlaceResponse> getResponsesByCategory(Long categoryId) {
+        return placeRepository.findByCategoryId(categoryId)
+                .stream()
+                .map(placeMapper::toResponse)
+                .toList();
+    }
+
+    public List<PlaceResponse> getFeaturedResponses() {
+        return placeRepository.findByIsFeaturedTrue()
+                .stream()
+                .map(placeMapper::toResponse)
+                .toList();
+    }
 }

@@ -1328,7 +1328,11 @@ async function openItinerary(tripId) {
 
     currentPlannerTrip = trip;
     currentPlannerDays = Array.isArray(days) ? days : [];
-    currentPlannerDestinationId = trip.destinationId || trip.destination?.id;
+    currentPlannerDestinationId =
+  trip.countryId ||
+  trip.destinationId ||
+  trip.country?.id ||
+  trip.destination?.id;
 
     renderItinerary(trip, currentPlannerDays);
     $("itineraryModal").classList.remove("hidden");
@@ -1382,7 +1386,12 @@ function renderItinerary(trip, days = []) {
 }
 
 function renderItineraryDay(day) {
-  const activities = Array.isArray(day.activities) ? day.activities : [];
+  //const activities = Array.isArray(day.activities) ? day.activities : [];
+  const activities =
+  day.activities ||
+  day.tripActivities ||
+  day.trip_activities ||
+  [];
 
   return `
     <article class="itinerary-day-card">
@@ -1425,7 +1434,7 @@ function renderActivityCard(activity) {
         ${activity.startTime || "—"} - ${activity.endTime || "—"}
       </div>
 
-      <strong>${escapeText(placeName)}</strong>
+      <strong>${escapeText(activity.title || placeName)}</strong>
 
       ${
         activity.notes
@@ -1595,13 +1604,15 @@ function findCountry(id) {
 }
 
 function getTripDestinationName(trip) {
-  if (trip.destinationName) return trip.destinationName;
-  if (trip.destination?.name) return trip.destination.name;
-
-  const destinationId = trip.destinationId || trip.destination?.id;
-  const country = findCountry(destinationId);
-
-  return country?.name || "Unknown destination";
+  return (
+    trip.countryName ||
+    trip.destinationName ||
+    trip.country?.name ||
+    trip.destination?.name ||
+    findCountry(trip.countryId)?.name ||
+    findCountry(trip.destinationId)?.name ||
+    "Unknown destination"
+  );
 }
 
 function formatTripRange(startDate, endDate) {

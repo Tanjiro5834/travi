@@ -1,6 +1,7 @@
 package com.nathaniel.travel_guide_app.controller.trip;
 
 import java.util.List;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,7 +18,7 @@ public class TripDayController {
     private final TripDayService tripDayService;
 
     @GetMapping("/trip/{tripId}")
-    public List<TripDayResponse> getByTrip(@PathVariable Long tripId) {
-        return tripDayService.getResponsesByTripId(tripId);
+    public ResponseEntity<List<TripDayResponse>> getByTrip(@PathVariable Long tripId) {
+        return ResponseEntity.ok(tripDayService.getDaysByTripId(tripId)); // ✅ correct
     }
 }
