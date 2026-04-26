@@ -206,9 +206,45 @@ function initNavbar() {
 function initHamburger() {
   const btn = $("hamburger");
   const links = $("navLinks");
-  if (btn && links) {
-    btn.addEventListener("click", () => links.classList.toggle("open"));
+  const overlay = $("sidebarOverlay");
+
+  function openSidebar() {
+    links.classList.add("open");
+    btn.classList.add("open");
+    if (overlay) overlay.classList.add("active");
+    document.body.style.overflow = "hidden";
   }
+
+  function closeSidebar() {
+    links.classList.remove("open");
+    btn.classList.remove("open");
+    if (overlay) overlay.classList.remove("active");
+    document.body.style.overflow = "";
+  }
+
+  if (btn && links) {
+    btn.addEventListener("click", () => {
+      links.classList.contains("open") ? closeSidebar() : openSidebar();
+    });
+  }
+
+  if (overlay) {
+    overlay.addEventListener("click", closeSidebar);
+  }
+
+  // Close sidebar when a nav link is clicked
+  if (links) {
+    links.querySelectorAll(".nav-link").forEach((link) => {
+      link.addEventListener("click", closeSidebar);
+    });
+  }
+
+  // Close on Escape
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && links && links.classList.contains("open")) {
+      closeSidebar();
+    }
+  });
 }
 
 // ============ AUTH MODAL INIT ============

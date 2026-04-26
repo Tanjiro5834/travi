@@ -170,8 +170,7 @@ public class TripService {
 
     private void generateActivities(TripDay day, Trip trip, Set<Long> usedPlaceIds) {
         List<Place> places = placeRepository.findByCountryId(trip.getCountry().getId());
-
-        if (places.isEmpty()) {
+        if(!isPlaceExist(places, trip)){
             throw new RuntimeException(
                 "No published places found for: " + trip.getCountry().getName() +
                 ". Add and publish places via the admin panel first."
@@ -179,33 +178,29 @@ public class TripService {
         }
 
         //replaced with category-aware distribution
-        Map<String, List<Place>> categorizedPlaces = new LinkedHashMap<>();
-        for(Place place : places){
-            String categoryName = place.getCategory() != null ? 
-            place.getCategory().getName() : "Uncategorized";
-            categorizedPlaces.computeIfAbsent(categoryName, k -> new ArrayList<>()).add(place);
-        }
-
+        Map<String, List<Place>> categorizedPlaces = categorizePlaces(places);
         ActivitySlot[] slots = pickSlots(trip.getTravelStyle());
+
+        List<TripActivity> activities = new ArrayList<>();
         for(int i = 0; i < slots.length; i++){
             ActivitySlot slot = slots[i];
-
-            Place bestPlace = findBestPlaceForSlot(slot, categorizedPlaces, usedPlaceIds);
-            if(bestPlace == null) continue;
-
-            usedPlaceIds.add(bestPlace.getId());
-
-            TripActivity activity = new TripActivity();
-            activity.setTripDay(day);
-            activity.setPlace(bestPlace);
-            activity.setTitle("Visit " + bestPlace.getName());
-            activity.setStartTime(LocalTime.parse(slot.startTime()));
-            activity.setEndTime(LocalTime.parse(slot.endTime()));
-            activity.setSortOrder(i + 1);
-            activity.setNotes(buildActivityNote(bestPlace, slot));
-
-            tripActivityRepository.save(activity);
+            Place place = findBestPlaceForSlot(slot, categorizedPlaces, usedPlaceIds);
+            if (place != null) {
+                usedPlaceIds.add(place.getId());
+        
+                TripActivity activity = new TripActivity();
+                activity.setTripDay(day);
+                activity.setPlace(place);
+                activity.setTitle("Visit " + place.getName());
+                activity.setStartTime(LocalTime.parse(slot.startTime()));
+                activity.setEndTime(LocalTime.parse(slot.endTime()));
+                activity.setSortOrder(i + 1);
+                activity.setNotes(buildActivityNote(place, slot));
+                
+                activities.add(activity);
+            }
         }
+        tripActivityRepository.saveAll(activities);
     }
 
     public BudgetSummaryDTO getBudgetSummary(Long tripId) {
@@ -257,6 +252,20 @@ public class TripService {
             tips,
             currentStatus
         );
+    }
+
+    private boolean isPlaceExist(List<Place> place, Trip trip){
+        return !place.isEmpty() || trip != null;
+    }
+
+    private Map<String, List<Place>> categorizePlaces(List<Place> places){
+        Map<String, List<Place>> placesByCategory = new LinkedHashMap<>();
+        for(Place place : places){
+            String categoryName = place.getCategory() != null ? 
+            place.getCategory().getName() : "Uncategorized";
+            placesByCategory.computeIfAbsent(categoryName, k -> new ArrayList<>()).add(place);
+        }
+        return placesByCategory;
     }
 
     private String generateTip(BudgetCategory category, BigDecimal amount, int days) {
@@ -347,11 +356,8 @@ public class TripService {
         };
     }
 
-    private Place findBestPlaceForSlot(
-        ActivitySlot slot,
-        Map<String, List<Place>> placesByCategory,
+    private Place findBestPlaceForSlot(ActivitySlot slot,Map<String, List<Place>> placesByCategory,
         Set<Long> usedPlaceIds) {
-
         // Try preferred categories in order
         for (String preferredCategory : slot.preferredCategories()) {
             List<Place> candidates = placesByCategory.getOrDefault(preferredCategory, List.of());
