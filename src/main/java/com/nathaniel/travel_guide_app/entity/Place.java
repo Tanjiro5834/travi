@@ -53,6 +53,9 @@ public class Place {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String tips;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

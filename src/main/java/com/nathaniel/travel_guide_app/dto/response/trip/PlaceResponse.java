@@ -27,4 +27,5 @@ public class PlaceResponse {
     private Boolean isPublished;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String tips;
 }

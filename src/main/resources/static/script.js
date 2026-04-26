@@ -1513,7 +1513,7 @@ function renderActivityCard(activity) {
         <div class="activity-top">
           <div>
             <div class="activity-time">
-              ${activity.startTime || "—"} - ${activity.endTime || "—"}
+               ${normalizeTime(activity.startTime)} - ${normalizeTime(activity.endTime)}
             </div>
             <strong>${escapeText(activity.title || placeName)}</strong>
           </div>
@@ -1878,9 +1878,16 @@ async function handleUpdateActivity(e) {
 
 function normalizeTime(value) {
   if (!value) return "";
-  return String(value).slice(0, 5);
+  
+  const parts = String(value).split(":");
+  const hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  
+  return `${displayHours}:${minutes} ${period}`;
 }
-
 
 let currentBudgetGuide = null;
 

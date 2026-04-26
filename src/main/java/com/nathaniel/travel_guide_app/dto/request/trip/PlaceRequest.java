@@ -21,4 +21,5 @@ public class PlaceRequest {
     private String contactInfo;
     private Boolean isFeatured;
     private Boolean isPublished;
+    private String tips;
 }

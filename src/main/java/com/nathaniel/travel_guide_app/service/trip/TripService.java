@@ -6,15 +6,19 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import com.nathaniel.travel_guide_app.dto.DTOs.BudgetForecastDTO;
 import com.nathaniel.travel_guide_app.dto.DTOs.BudgetSummaryDTO;
+import com.nathaniel.travel_guide_app.dto.request.trip.ActivitySlot;
 import com.nathaniel.travel_guide_app.dto.request.trip.TripRequest;
 import com.nathaniel.travel_guide_app.dto.response.trip.TripDayResponse;
 import com.nathaniel.travel_guide_app.dto.response.trip.TripResponse;
+import com.nathaniel.travel_guide_app.entity.Category;
 import com.nathaniel.travel_guide_app.entity.Country;
 import com.nathaniel.travel_guide_app.entity.Place;
 import com.nathaniel.travel_guide_app.entity.Trip;
@@ -26,6 +30,7 @@ import com.nathaniel.travel_guide_app.enums.TripStatus;
 import com.nathaniel.travel_guide_app.mapper.TripDayMapper;
 import com.nathaniel.travel_guide_app.mapper.TripMapper;
 import com.nathaniel.travel_guide_app.repository.CountryRepository;
+import com.nathaniel.travel_guide_app.repository.Trip.CategoryRepository;
 import com.nathaniel.travel_guide_app.repository.Trip.PlaceRepository;
 import com.nathaniel.travel_guide_app.repository.Trip.TripActivityRepository;
 import com.nathaniel.travel_guide_app.repository.Trip.TripDayRepository;
@@ -43,6 +48,7 @@ public class TripService {
     private final TripDayRepository tripDayRepository;
     private final PlaceRepository placeRepository;
     private final CountryRepository countryRepository;
+    private final CategoryRepository categoryRepository;
     private final TripMapper tripMapper;
     private final TripDayMapper tripDayMapper;
 
@@ -148,6 +154,7 @@ public class TripService {
     }
 
     private void generateTripDays(Trip trip) {
+        Set<Long> usedPlaceIds = new HashSet<>();
         for (int i = 0; i < trip.getNumberOfDays(); i++) {
             TripDay day = new TripDay();
 
@@ -157,11 +164,11 @@ public class TripService {
 
             TripDay savedDay = tripDayRepository.save(day);
 
-            generateActivities(savedDay, trip);
+            generateActivities(savedDay, trip, usedPlaceIds);
         }
     }
 
-    private void generateActivities(TripDay day, Trip trip) {
+    private void generateActivities(TripDay day, Trip trip, Set<Long> usedPlaceIds) {
         List<Place> places = placeRepository.findByCountryId(trip.getCountry().getId());
 
         if (places.isEmpty()) {
@@ -171,22 +178,31 @@ public class TripService {
             );
         }
 
-        List<Place> shuffled = new ArrayList<>(places);
-        Collections.shuffle(shuffled);
+        //replaced with category-aware distribution
+        Map<String, List<Place>> categorizedPlaces = new LinkedHashMap<>();
+        for(Place place : places){
+            String categoryName = place.getCategory() != null ? 
+            place.getCategory().getName() : "Uncategorized";
+            categorizedPlaces.computeIfAbsent(categoryName, k -> new ArrayList<>()).add(place);
+        }
 
-        String[][] slots = pickSlots(trip.getTravelStyle());
+        ActivitySlot[] slots = pickSlots(trip.getTravelStyle());
+        for(int i = 0; i < slots.length; i++){
+            ActivitySlot slot = slots[i];
 
-        for (int i = 0; i < slots.length && i < places.size(); i++) {
-            String[] time = slots[i];
+            Place bestPlace = findBestPlaceForSlot(slot, categorizedPlaces, usedPlaceIds);
+            if(bestPlace == null) continue;
+
+            usedPlaceIds.add(bestPlace.getId());
 
             TripActivity activity = new TripActivity();
             activity.setTripDay(day);
-            activity.setPlace(places.get(i));
-            activity.setTitle("Visit " + places.get(i).getName()); 
-            activity.setStartTime(LocalTime.parse(time[0]));
-            activity.setEndTime(LocalTime.parse(time[1]));
+            activity.setPlace(bestPlace);
+            activity.setTitle("Visit " + bestPlace.getName());
+            activity.setStartTime(LocalTime.parse(slot.startTime()));
+            activity.setEndTime(LocalTime.parse(slot.endTime()));
             activity.setSortOrder(i + 1);
-            activity.setNotes("Visit " + places.get(i).getName());
+            activity.setNotes(buildActivityNote(bestPlace, slot));
 
             tripActivityRepository.save(activity);
         }
@@ -256,6 +272,108 @@ public class TripService {
         };
     }
 
+    private String buildActivityNote(Place place, ActivitySlot slot) {
+        StringBuilder note = new StringBuilder();
+        
+        if (place.getDescription() != null && !place.getDescription().isBlank()) {
+            note.append(place.getDescription());
+        }
+
+        if (place.getTips() != null && !place.getTips().isBlank()) {
+            if (!note.isEmpty()) note.append("\n");
+            note.append("💡 ").append(place.getTips());
+        }
+
+        if (slot.startTime().compareTo("12:00") >= 0 && slot.startTime().compareTo("14:00") < 0) {
+            if (!note.isEmpty()) note.append("\n");
+            note.append("🍽️ Good time for a meal break nearby.");
+        } else if (slot.startTime().compareTo("17:00") >= 0) {
+            if (!note.isEmpty()) note.append("\n");
+            note.append("🌇 Great evening atmosphere.");
+        }
+
+        return note.toString();
+    }
+
+    private ActivitySlot[] pickSlots(TravelStyle travelStyle) {
+        if (travelStyle == null) travelStyle = TravelStyle.SOLO;
+
+        return switch (travelStyle) {
+            case BACKPACKING -> new ActivitySlot[] {
+                new ActivitySlot("07:00", "09:00",  List.of("Nature & Parks", "City Landmarks")),
+                new ActivitySlot("09:30", "12:00",  List.of("Historical Sites", "Temples & Religious Sites")),
+                new ActivitySlot("12:00", "13:30",  List.of("Markets & Shopping")),
+                new ActivitySlot("14:00", "16:00",  List.of("Museums & Culture", "Historical Sites")),
+                new ActivitySlot("17:00", "20:00",  List.of("Beaches & Islands", "Markets & Shopping"))
+            };
+            
+            case FAMILY -> new ActivitySlot[] {
+                new ActivitySlot("08:00", "10:00",  List.of("Nature & Parks", "City Landmarks")),
+                new ActivitySlot("10:30", "12:00",  List.of("Museums & Culture", "Historical Sites")),
+                new ActivitySlot("12:00", "13:30",  List.of("Markets & Shopping")),
+                new ActivitySlot("14:00", "16:00",  List.of("Museums & Culture", "Markets & Shopping")),
+                new ActivitySlot("17:00", "19:00",  List.of("City Landmarks", "Beaches & Islands"))
+            };
+            
+            case COUPLE -> new ActivitySlot[] {
+                new ActivitySlot("09:00", "11:00",  List.of("City Landmarks", "Historical Sites")),
+                new ActivitySlot("11:30", "13:00",  List.of("Markets & Shopping", "Beaches & Islands")),
+                new ActivitySlot("14:00", "16:00",  List.of("Museums & Culture", "Historical Sites")),
+                new ActivitySlot("17:00", "19:00",  List.of("City Landmarks", "Beaches & Islands")),
+                new ActivitySlot("19:30", "21:00",  List.of("Markets & Shopping", "City Landmarks"))
+            };
+            
+            case BUSINESS -> new ActivitySlot[] {
+                new ActivitySlot("08:00", "12:00",  List.of("Museums & Culture", "City Landmarks")),
+                new ActivitySlot("12:00", "13:00",  List.of("Markets & Shopping")),
+                new ActivitySlot("18:00", "21:00",  List.of("City Landmarks", "Beaches & Islands"))
+            };
+            
+            case FRIENDS -> new ActivitySlot[] {
+                new ActivitySlot("10:00", "12:00",  List.of("City Landmarks", "Nature & Parks")),
+                new ActivitySlot("12:30", "14:00",  List.of("Markets & Shopping")),
+                new ActivitySlot("14:30", "16:30",  List.of("Museums & Culture", "Markets & Shopping")),
+                new ActivitySlot("17:00", "19:00",  List.of("City Landmarks", "Beaches & Islands")),
+                new ActivitySlot("20:00", "22:00",  List.of("Markets & Shopping", "City Landmarks"))
+            };
+            
+            default -> new ActivitySlot[] { // SOLO
+                new ActivitySlot("08:00", "10:00",  List.of("City Landmarks", "Nature & Parks")),
+                new ActivitySlot("10:30", "12:00",  List.of("Museums & Culture", "Historical Sites")),
+                new ActivitySlot("12:30", "14:00",  List.of("Markets & Shopping")),
+                new ActivitySlot("14:30", "16:00",  List.of("Temples & Religious Sites", "Historical Sites")),
+                new ActivitySlot("17:00", "19:00",  List.of("City Landmarks", "Beaches & Islands"))
+            };
+        };
+    }
+
+    private Place findBestPlaceForSlot(
+        ActivitySlot slot,
+        Map<String, List<Place>> placesByCategory,
+        Set<Long> usedPlaceIds) {
+
+        // Try preferred categories in order
+        for (String preferredCategory : slot.preferredCategories()) {
+            List<Place> candidates = placesByCategory.getOrDefault(preferredCategory, List.of());
+            for (Place place : candidates) {
+                if (!usedPlaceIds.contains(place.getId())) {
+                    return place;
+                }
+            }
+        }
+
+        // Fallback: pick any unused place
+        for(List<Place> categoryPlaces : placesByCategory.values()){
+            for(Place place : categoryPlaces){
+                if(!usedPlaceIds.contains(place.getId())){
+                    return place;
+                }
+            }
+        }
+
+        return null;
+    }
+
     public TripResponse getResponseById(Long id) {
         Trip trip = tripRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Trip not found with id: " + id));
@@ -282,46 +400,5 @@ public class TripService {
             .stream()
             .map(tripMapper::toResponse)
             .toList();
-    }
-
-    private String[][] pickSlots(TravelStyle travelStyle) {
-        if (travelStyle == null) {
-            travelStyle = TravelStyle.SOLO;
-        }
-
-        return switch (travelStyle) {
-            case BACKPACKING -> new String[][] {
-                {"07:00", "09:00"},
-                {"09:30", "11:30"},
-                {"13:00", "15:00"},
-                {"15:30", "18:00"}
-            };
-            case BUSINESS -> new String[][] {
-                {"08:00", "10:00"},
-                {"12:00", "13:00"},
-                {"18:00", "20:00"}
-            };
-            case COUPLE -> new String[][] {
-                {"09:00", "11:00"},
-                {"13:00", "15:00"},
-                {"17:00", "19:00"}
-            };
-            case FAMILY -> new String[][] {
-                {"09:00", "11:00"},
-                {"13:00", "15:00"},
-                {"16:00", "18:00"}
-            };
-            case FRIENDS -> new String[][] {
-                {"10:00", "12:00"},
-                {"13:30", "15:30"},
-                {"17:00", "19:00"}
-            };
-            case SOLO -> new String[][] {
-                {"08:00", "10:00"},
-                {"10:30", "12:00"},
-                {"13:30", "15:00"},
-                {"15:30", "17:00"}
-            };
-        };
     }
 }

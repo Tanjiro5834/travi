@@ -27,7 +27,7 @@ public class PlaceMapper {
         place.setContactInfo(request.getContactInfo());
         place.setIsFeatured(request.getIsFeatured() != null ? request.getIsFeatured() : false);
         place.setIsPublished(request.getIsPublished() != null ? request.getIsPublished() : false);
-
+        place.setTips(request.getTips());
         return place;
     }
 
@@ -52,6 +52,7 @@ public class PlaceMapper {
         response.setIsPublished(place.getIsPublished());
         response.setCreatedAt(place.getCreatedAt());
         response.setUpdatedAt(place.getUpdatedAt());
+        response.setTips(place.getTips());
 
         return response;
     }
@@ -68,6 +69,7 @@ public class PlaceMapper {
         place.setRecommendedDurationMinutes(request.getRecommendedDurationMinutes());
         place.setOpeningHours(request.getOpeningHours());
         place.setContactInfo(request.getContactInfo());
+        place.setTips(request.getTips());
 
         if (request.getIsFeatured() != null) {
             place.setIsFeatured(request.getIsFeatured());
