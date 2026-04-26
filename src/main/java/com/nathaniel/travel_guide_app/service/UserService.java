@@ -49,8 +49,8 @@ public class UserService {
     }
 
     public LoginResponse login(LoginRequest request){
-        User user = userRepository.findByEmail(request.getEmail())
-            .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+        User user = userRepository.findByUsername(request.getUsername())
+            .orElseThrow(() -> new RuntimeException("Username not found"));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Invalid password");
@@ -73,8 +73,8 @@ public class UserService {
             throw new AccessDeniedException("User not authenticated");
         }
 
-        String email = authentication.getName();
-        return userRepository.findByEmail(email)
+        String username = authentication.getName();
+        return userRepository.findByUsername(username)
             .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 

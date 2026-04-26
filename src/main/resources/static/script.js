@@ -3,6 +3,7 @@ const API_BASE = "/api";
 // ============ STATE ============
 let currentCountryId = null; // numeric ID from DB
 let currentCountrySlug = null; // for packing state key
+let currentUser = null;
 let countriesCache = []; // List<Country> from GET /api/countries
 let packingState = JSON.parse(localStorage.getItem("travi_packing") || "{}");
 
@@ -122,16 +123,30 @@ async function handleLogin(e) {
   if (!username || !password)
     return showToast("Please fill in all fields.", "error");
   try {
-    // POST /api/auth/login  → LoginResponse { token, ... }
     const data = await apiFetch("/auth/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+    
+    // Backend returns: { token, id, username, email, role }
     setToken(data.token);
+    
+    // Store user info from the root level, not from data.user
+    const userInfo = {
+      id: data.id,
+      username: data.username,
+      email: data.email,
+      role: data.role
+    };
+    localStorage.setItem("travi_user", JSON.stringify(userInfo));
+    
     updateAuthUI();
     closeAuthModal();
     showToast("Welcome back!", "success");
-    renderSavedSection(); // reload saved from server
+    
+    // Refresh saved destinations and trips
+    await renderSavedSection();
+    await loadMyTrips();
   } catch (err) {
     showToast("Login failed. Check your credentials.", "error");
   }
@@ -145,15 +160,24 @@ async function handleRegister(e) {
   if (!username || !email || !password)
     return showToast("Please fill in all fields.", "error");
   try {
-    // POST /api/auth/register  → RegisterResponse { token, ... }
     const data = await apiFetch("/auth/register", {
       method: "POST",
       body: JSON.stringify({ username, email, password }),
     });
+    // data = { token, user: { id, username, email, role } }
     setToken(data.token);
+    
+    if (data.user) {
+      localStorage.setItem("travi_user", JSON.stringify(data.user));
+    }
+    
     updateAuthUI();
     closeAuthModal();
-    showToast("Account created!", "success");
+    showToast("Account created! Welcome!", "success");
+    
+    // Refresh UI
+    await renderSavedSection();
+    await loadMyTrips();
   } catch (err) {
     showToast("Registration failed. Try a different username/email.", "error");
   }
@@ -161,9 +185,62 @@ async function handleRegister(e) {
 
 function handleLogout() {
   clearToken();
+  localStorage.removeItem("travi_user"); // Clear user data
   updateAuthUI();
   renderSavedSection();
+  loadMyTrips();
   showToast("Logged out.");
+}
+
+function getCurrentUser() {
+  const stored = localStorage.getItem("travi_user");
+  return stored ? JSON.parse(stored) : null;
+}
+
+function setCurrentUser(user) {
+  currentUser = user;
+  if (user) {
+    localStorage.setItem("travi_user", JSON.stringify(user));
+  } else {
+    localStorage.removeItem("travi_user");
+  }
+}
+
+function updateAuthUI() {
+  const loggedIn = isLoggedIn();
+  const currentUser = getCurrentUser();
+  
+  const signInBtns = document.querySelectorAll(".btn-sign-in");
+  const getStartedBtns = document.querySelectorAll(".btn-get-started");
+  const logoutBtns = document.querySelectorAll(".btn-logout");
+
+  signInBtns.forEach((b) => (b.style.display = loggedIn ? "none" : ""));
+  getStartedBtns.forEach((b) => (b.style.display = loggedIn ? "none" : ""));
+  logoutBtns.forEach((b) => (b.style.display = loggedIn ? "" : "none"));
+  
+  // Optional: Add username display in navbar
+  let usernameSpan = document.querySelector(".nav-username");
+  if (!usernameSpan && loggedIn && currentUser) {
+    // Create username display if it doesn't exist
+    const navLinks = $("navLinks");
+    if (navLinks) {
+      const li = document.createElement("li");
+      usernameSpan = document.createElement("span");
+      usernameSpan.className = "nav-username";
+      usernameSpan.style.cssText = "color: white; padding: 8px 14px; font-weight: 500;";
+      usernameSpan.textContent = currentUser.username;
+      li.appendChild(usernameSpan);
+      // Insert before logout button
+      const logoutLi = navLinks.querySelector("li:has(.btn-logout)");
+      if (logoutLi) {
+        navLinks.insertBefore(li, logoutLi);
+      }
+    }
+  } else if (usernameSpan && (!loggedIn || !currentUser)) {
+    usernameSpan.remove();
+  } else if (usernameSpan && currentUser) {
+    usernameSpan.textContent = currentUser.username;
+  }
 }
 
 // ============ INIT ============
@@ -171,11 +248,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   initNavbar();
   initHamburger();
   initAuthModal();
+
+  await verifyCurrentUser();
   updateAuthUI();
   await loadCountries();
+
   renderDestinationsGrid();
   renderSavedSection();
   initSearch();
+
   initHeroChips();
   initPlanner();
 });
@@ -463,6 +544,9 @@ async function openCountry(id) {
     $("countryName").textContent = country.name;
     $("countryTagline").textContent = country.tagline || "";
 
+    // Set currency for this country (budget guide may override later)
+    if (country.currency) currentCurrencyCode = country.currency.toUpperCase();
+
     // Save button state
     updateSaveBtn();
 
@@ -662,11 +746,19 @@ function populateBudget(b) {
     return;
   }
 
-  const currency = b.currency === "PHP" ? "₱" : "$";
+  // Set the global currency so formatCurrency picks it up everywhere
+  if (b.currency) currentCurrencyCode = b.currency.toUpperCase();
+
+  const { symbol, locale } = getCurrencyInfo(currentCurrencyCode);
+
+  const fmt = (num) =>
+    num != null
+      ? symbol + Number(num).toLocaleString(locale, { maximumFractionDigits: 0 })
+      : "—";
 
   const format = (min, max) => {
-    if (min && max) return `${currency}${min}–${max}`;
-    if (min && !max) return `${currency}${min}+`;
+    if (min != null && max != null) return `${fmt(min)}–${fmt(max)}`;
+    if (min != null) return `${fmt(min)}+`;
     return "—";
   };
 
@@ -1224,7 +1316,7 @@ async function handleCreatePlan(e) {
   const peopleCount = Number($("tripPeopleCount").value || 1);
   const representativeName = $("tripRepresentativeName").value.trim();
   const notes = $("tripNotes").value.trim();
-  const totalBudget = parseFloat($("tripTotalBudget").value) || null; //added
+  const totalBudget = parseFloat($("tripTotalBudget").value) || null;
 
   if (!destinationId || !numberOfDays) {
     showToast("Please select a country and number of days.", "error");
@@ -1232,16 +1324,23 @@ async function handleCreatePlan(e) {
   }
 
   const country = findCountry(destinationId);
+  const user = getCurrentUser();
+
+  if (!user) {
+    showToast("Please log in to create a trip.", "error");
+    openAuthModal("login");
+    return;
+  }
 
   const payload = {
-    userId: 1, // temporary until login/register is finished
-    countryId: destinationId, // ✅ map here
+    userId: user.id, // Use actual user ID
+    countryId: destinationId,
     title: `${country?.name || "Travel"} ${numberOfDays}-Day Trip`,
     numberOfDays,
     peopleCount,
     representativeName,
     travelStyle,
-    totalBudget, //added
+    totalBudget,
     notes,
   };
 
@@ -1253,11 +1352,27 @@ async function handleCreatePlan(e) {
 
     closePlannerModal();
     showToast("Trip plan generated!", "success");
-
     await renderGeneratedPlan(trip);
+    await loadMyTrips(); // Refresh the trips list
   } catch (err) {
     console.error(err);
     showToast("Could not generate trip plan.", "error");
+  }
+}
+
+async function verifyCurrentUser() {
+  if (!isLoggedIn()) return null;
+  
+  try {
+    const user = await apiFetch("/auth/me");
+    setCurrentUser(user);
+    return user;
+  } catch (err) {
+    // Token might be invalid
+    clearToken();
+    localStorage.removeItem("travi_user");
+    updateAuthUI();
+    return null;
   }
 }
 
@@ -1295,10 +1410,16 @@ async function loadMyTrips() {
   const grid = $("plannerTripsGrid");
   if (!grid) return;
 
-  // if (!isLoggedIn()) {
-  //   renderPlannerEmptyState();
-  //   return;
-  // }
+  if (!isLoggedIn()) {
+    renderPlannerEmptyState();
+    return;
+  }
+
+  const user = getCurrentUser();
+  if (!user) {
+    renderPlannerEmptyState();
+    return;
+  }
 
   grid.innerHTML = `
     <div class="planner-empty">
@@ -1308,7 +1429,8 @@ async function loadMyTrips() {
   `;
 
   try {
-    const trips = await apiFetch("/trips/user/1"); // temporary until login is implemented
+    // Use actual user ID instead of hardcoded 1
+    const trips = await apiFetch(`/trips/user/${user.id}`);
     renderPlannerTrips(Array.isArray(trips) ? trips : []);
   } catch (err) {
     console.error(err);
@@ -1389,6 +1511,19 @@ async function openItinerary(tripId) {
       trip.destination?.id;
 
     currentPlannerDestinationId = countryId;
+
+    // Resolve currency from trip's country data
+    const tripCountry =
+      trip.country ||
+      trip.destination ||
+      findCountry(countryId);
+    if (tripCountry?.currency) {
+      currentCurrencyCode = tripCountry.currency.toUpperCase();
+    } else if (countryId) {
+      // Fallback: look up from cache
+      const cached = findCountry(countryId);
+      if (cached?.currency) currentCurrencyCode = cached.currency.toUpperCase();
+    }
 
     renderItinerary(trip, currentPlannerDays);
 
@@ -1988,11 +2123,15 @@ function renderTripBudget() {
 }
 
 function formatMoneyRange(currency, min, max) {
-  return `${currency} ${formatNumber(min)} - ${formatNumber(max)}`;
+  const code = (currency || currentCurrencyCode || "PHP").toUpperCase();
+  const info = getCurrencyInfo(code);
+  const fmt = (n) => info.symbol + Number(n).toLocaleString(info.locale, { maximumFractionDigits: 0 });
+  return `${fmt(min)} - ${fmt(max)}`;
 }
 
 function formatNumber(value) {
-  return Number(value).toLocaleString("en-PH", {
+  const info = getCurrencyInfo(currentCurrencyCode);
+  return Number(value).toLocaleString(info.locale, {
     maximumFractionDigits: 0
   });
 }
@@ -2121,11 +2260,129 @@ function formatStatusLabel(statusMessage) {
   return escapeText(statusMessage);
 }
 
-function formatCurrency(amount) {
+// ============ CURRENCY SYSTEM ============
+
+// ISO 4217 → { symbol, locale, symbolAfter? }
+const CURRENCY_MAP = {
+  // Southeast Asia
+  PHP: { symbol: "₱",  locale: "en-PH" },
+  THB: { symbol: "฿",  locale: "th-TH" },
+  VND: { symbol: "₫",  locale: "vi-VN" },
+  IDR: { symbol: "Rp", locale: "id-ID" },
+  MYR: { symbol: "RM", locale: "ms-MY" },
+  SGD: { symbol: "S$", locale: "en-SG" },
+  MMK: { symbol: "K",  locale: "my-MM" },
+  KHR: { symbol: "៛",  locale: "km-KH" },
+  LAK: { symbol: "₭",  locale: "lo-LA" },
+  BND: { symbol: "B$", locale: "ms-BN" },
+
+  // East Asia
+  CNY: { symbol: "¥",  locale: "zh-CN" },
+  JPY: { symbol: "¥",  locale: "ja-JP" },
+  KRW: { symbol: "₩",  locale: "ko-KR" },
+  TWD: { symbol: "NT$",locale: "zh-TW" },
+  HKD: { symbol: "HK$",locale: "zh-HK" },
+  MOP: { symbol: "P",  locale: "zh-MO" },
+
+  // South Asia
+  INR: { symbol: "₹",  locale: "en-IN" },
+  NPR: { symbol: "₨",  locale: "ne-NP" },
+  PKR: { symbol: "₨",  locale: "ur-PK" },
+  LKR: { symbol: "₨",  locale: "si-LK" },
+  BDT: { symbol: "৳",  locale: "bn-BD" },
+  MVR: { symbol: "Rf", locale: "dv-MV" },
+  BTN: { symbol: "Nu", locale: "dz-BT" },
+
+  // Middle East & Central Asia
+  AED: { symbol: "د.إ", locale: "ar-AE" },
+  SAR: { symbol: "﷼",  locale: "ar-SA" },
+  QAR: { symbol: "﷼",  locale: "ar-QA" },
+  KWD: { symbol: "KD", locale: "ar-KW" },
+  BHD: { symbol: "BD", locale: "ar-BH" },
+  OMR: { symbol: "﷼",  locale: "ar-OM" },
+  JOD: { symbol: "JD", locale: "ar-JO" },
+  ILS: { symbol: "₪",  locale: "he-IL" },
+  TRY: { symbol: "₺",  locale: "tr-TR" },
+  IRR: { symbol: "﷼",  locale: "fa-IR" },
+  KZT: { symbol: "₸",  locale: "kk-KZ" },
+  UZS: { symbol: "so'm", locale: "uz-UZ" },
+
+  // Europe
+  EUR: { symbol: "€",  locale: "de-DE" },
+  GBP: { symbol: "£",  locale: "en-GB" },
+  CHF: { symbol: "Fr", locale: "de-CH" },
+  NOK: { symbol: "kr", locale: "nb-NO" },
+  SEK: { symbol: "kr", locale: "sv-SE" },
+  DKK: { symbol: "kr", locale: "da-DK" },
+  PLN: { symbol: "zł", locale: "pl-PL" },
+  CZK: { symbol: "Kč", locale: "cs-CZ" },
+  HUF: { symbol: "Ft", locale: "hu-HU" },
+  RON: { symbol: "lei",locale: "ro-RO" },
+  BGN: { symbol: "лв", locale: "bg-BG" },
+  HRK: { symbol: "kn", locale: "hr-HR" },
+  RSD: { symbol: "din", locale: "sr-RS" },
+  UAH: { symbol: "₴",  locale: "uk-UA" },
+  RUB: { symbol: "₽",  locale: "ru-RU" },
+  ISK: { symbol: "kr", locale: "is-IS" },
+  ALL: { symbol: "L",  locale: "sq-AL" },
+  MKD: { symbol: "ден", locale: "mk-MK" },
+  BAM: { symbol: "KM", locale: "bs-BA" },
+
+  // Americas
+  USD: { symbol: "$",  locale: "en-US" },
+  CAD: { symbol: "CA$",locale: "en-CA" },
+  MXN: { symbol: "MX$",locale: "es-MX" },
+  BRL: { symbol: "R$", locale: "pt-BR" },
+  ARS: { symbol: "$",  locale: "es-AR" },
+  CLP: { symbol: "$",  locale: "es-CL" },
+  COP: { symbol: "$",  locale: "es-CO" },
+  PEN: { symbol: "S/", locale: "es-PE" },
+  UYU: { symbol: "$U", locale: "es-UY" },
+  BOB: { symbol: "Bs", locale: "es-BO" },
+  PYG: { symbol: "₲",  locale: "es-PY" },
+  GTQ: { symbol: "Q",  locale: "es-GT" },
+  CRC: { symbol: "₡",  locale: "es-CR" },
+  DOP: { symbol: "RD$",locale: "es-DO" },
+  CUP: { symbol: "₱",  locale: "es-CU" },
+
+  // Africa
+  ZAR: { symbol: "R",  locale: "en-ZA" },
+  NGN: { symbol: "₦",  locale: "en-NG" },
+  KES: { symbol: "KSh",locale: "sw-KE" },
+  GHS: { symbol: "₵",  locale: "en-GH" },
+  EGP: { symbol: "£",  locale: "ar-EG" },
+  MAD: { symbol: "MAD",locale: "ar-MA" },
+  ETB: { symbol: "Br", locale: "am-ET" },
+  TZS: { symbol: "TSh",locale: "sw-TZ" },
+  UGX: { symbol: "USh",locale: "sw-UG" },
+  XOF: { symbol: "CFA",locale: "fr-SN" },
+  XAF: { symbol: "FCFA",locale: "fr-CM" },
+
+  // Oceania
+  AUD: { symbol: "A$", locale: "en-AU" },
+  NZD: { symbol: "NZ$",locale: "en-NZ" },
+  FJD: { symbol: "FJ$",locale: "en-FJ" },
+  PGK: { symbol: "K",  locale: "en-PG" },
+};
+
+// Currently active currency code (updated when a country is opened or a trip loaded)
+let currentCurrencyCode = "PHP";
+
+/** Resolve currency info from an ISO code, falling back to USD. */
+function getCurrencyInfo(code) {
+  return CURRENCY_MAP[(code || "").toUpperCase()] || { symbol: code || "$", locale: "en-US" };
+}
+
+/** Format a number as currency using the current country's currency. */
+function formatCurrency(amount, currencyCode) {
   const num = parseFloat(amount);
-  if (isNaN(num)) return "₱0";
-  return "₱" + num.toLocaleString("en-PH", {
+  if (isNaN(num)) {
+    const info = getCurrencyInfo(currencyCode || currentCurrencyCode);
+    return `${info.symbol}0`;
+  }
+  const info = getCurrencyInfo(currencyCode || currentCurrencyCode);
+  return info.symbol + num.toLocaleString(info.locale, {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0
+    maximumFractionDigits: 0,
   });
 }
